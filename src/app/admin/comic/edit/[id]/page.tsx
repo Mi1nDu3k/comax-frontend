@@ -6,13 +6,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { comicService } from '@/services/comic.service';
 import { categoryService } from '@/services/category.service';
 import { authorService, Author } from '@/services/author.service';
-// 1. Dùng Type Comic ở đây để định nghĩa cho dữ liệu API trả về
-import { Category} from '@/types/comic'; 
-import { FaArrowLeft, FaSave, FaImage, FaSearch } from 'react-icons/fa';
+import { chapterService } from '@/services/chapter.service'; // Service chương
+import { Category } from '@/types/comic'; 
+import { Chapter } from '@/types/chapter'; // Type chương
+import { FaArrowLeft, FaSave, FaImage, FaSearch, FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import Link from 'next/link';
 import Image from 'next/image';
+import { toast } from 'react-toastify';
 
-// 2. Định nghĩa Interface cho InitialData để tránh dùng 'any'
 interface ComicFormValues {
   title: string;
   description: string;
@@ -29,31 +30,33 @@ export default function EditComicPage() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [authors, setAuthors] = useState<Author[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]); // Danh sách chương
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [catSearch, setCatSearch] = useState('');
   const [loading, setLoading] = useState(true);
   
-  // 3. Thay <any> bằng Interface vừa tạo
   const [initialData, setInitialData] = useState<ComicFormValues | null>(null);
 
+  // 1. Load dữ liệu Truyện + Danh sách Chapter
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [comicData, catsData, authorsData] = await Promise.all([
+        const [comicData, catsData, authorsData, chaptersData] = await Promise.all([
           comicService.getById(comicId.toString()),
           categoryService.getAll(),
-          authorService.getAll()
+          authorService.getAll(),
+          chapterService.getByComicId(comicId.toString()) // Gọi API lấy chapter
         ]);
 
         setCategories(catsData);
         setAuthors(authorsData);
+        setChapters(chaptersData || []);
 
-        // comicData ở đây có kiểu là Comic (từ service)
         setInitialData({
           title: comicData.title,
           description: comicData.description,
-          authorId: comicData.authorName || '',
-          // 4. Sửa (c: any) thành (c: Category)
+          // Lấy ID tác giả (fallback về rỗng nếu lỗi)
+          authorId: comicData.authorId || '',
           categoryIds: comicData.categories ? comicData.categories.map((c: Category) => c.id.toString()) : [],
           status: typeof comicData.status === 'number' ? comicData.status : 1,
           thumbnailUrl: comicData.thumbnailUrl
@@ -61,7 +64,7 @@ export default function EditComicPage() {
 
       } catch (error) {
         console.error("Lỗi tải dữ liệu:", error);
-        alert('Không tìm thấy truyện hoặc lỗi kết nối.');
+        toast.error('Không tìm thấy truyện hoặc lỗi kết nối.');
         router.push('/admin/comic');
       } finally {
         setLoading(false);
@@ -100,14 +103,25 @@ export default function EditComicPage() {
         }
 
         await comicService.update(comicId, formData);
-        alert('Cập nhật truyện thành công!');
-        router.push('/admin/comic');
+        toast.success('Cập nhật truyện thành công!');
       } catch (error) {
         console.error(error);
-        alert('Lỗi khi cập nhật truyện.');
+        toast.error('Lỗi khi cập nhật truyện.');
       }
     },
   });
+
+  // Xử lý xóa Chapter trực tiếp tại đây
+  const handleDeleteChapter = async (chapterId: number) => {
+      if(!confirm("Bạn có chắc chắn muốn xóa chương này?")) return;
+      try {
+          await chapterService.delete(chapterId);
+          setChapters(prev => prev.filter(c => c.id !== chapterId));
+          toast.success("Đã xóa chương");
+      } catch {
+          toast.error("Lỗi khi xóa chương");
+      }
+  }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -136,164 +150,203 @@ export default function EditComicPage() {
 
   return (
     <div className="max-w-5xl mx-auto pb-20">
+      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Link href="/admin/comic" className="text-gray-500 hover:text-gray-800" aria-label="Quay lại">
           <FaArrowLeft />
         </Link>
-        <h1 className="text-2xl font-bold text-gray-800">Cập nhật truyện: <span className="text-blue-600">{initialData?.title}</span></h1>
+        <h1 className="text-2xl font-bold text-gray-800">
+            Cập nhật truyện: <span className="text-blue-600">{initialData?.title}</span>
+        </h1>
       </div>
 
-      <div className="bg-white p-8 rounded-lg shadow-md">
+      {/* --- PHẦN 1: FORM SỬA THÔNG TIN TRUYỆN --- */}
+      <div className="bg-white p-8 rounded-lg shadow-md mb-8">
+        <h2 className="text-lg font-bold mb-4 border-b pb-2 text-gray-700">Thông tin chung</h2>
         <form onSubmit={formik.handleSubmit} className="space-y-8">
-          
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* CỘT TRÁI: ẢNH BÌA */}
+            {/* Ảnh bìa */}
             <div className="lg:col-span-1">
-              <label htmlFor="coverImageFile" className="block text-sm font-bold text-gray-700 mb-2">Ảnh bìa</label>
+              <label htmlFor="coverImage" className="block text-sm font-bold text-gray-700 mb-2">Ảnh bìa</label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:bg-gray-50 transition relative aspect-[2/3] flex flex-col items-center justify-center bg-gray-50">
                 <input
-                  id="coverImageFile"
+                  id="coverImage"
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  aria-label="Thay đổi ảnh bìa"
+                  aria-label="Tải lên ảnh bìa"
                 />
-                
                 {previewImage ? (
-                  <Image src={previewImage} alt="Preview New" fill className="object-cover rounded-md" unoptimized />
+                  <Image src={previewImage} alt="Preview" fill className="object-cover rounded-md" unoptimized />
                 ) : initialData?.thumbnailUrl ? (
-                  <Image src={initialData.thumbnailUrl} alt="Current Cover" fill className="object-cover rounded-md" unoptimized />
+                  <Image src={initialData.thumbnailUrl} alt="Cover" fill className="object-cover rounded-md" unoptimized />
                 ) : (
-                  <div className="text-gray-400">
-                    <FaImage size={48} className="mx-auto mb-2" />
-                    <p className="text-sm">Chưa có ảnh</p>
-                  </div>
+                  <div className="text-gray-400"><FaImage size={48} /><p>Chưa có ảnh</p></div>
                 )}
-                
-                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs py-1 z-20 pointer-events-none">
-                    Nhấn để đổi ảnh
-                </div>
               </div>
             </div>
 
-            {/* CỘT PHẢI: THÔNG TIN */}
+            {/* Các trường thông tin */}
             <div className="lg:col-span-2 space-y-6">
-              
-              <div className="grid grid-cols-2 gap-4">
-                {/* Tên truyện */}
-                <div className="col-span-2">
-                    <label htmlFor="title" className="block text-sm font-bold text-gray-700 mb-1">Tên truyện <span className="text-red-500">*</span></label>
-                    <input
-                    id="title"
-                    type="text"
-                    name="title"
-                    onChange={formik.handleChange}
-                    value={formik.values.title}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    {/* 5. Ép kiểu lỗi thành string */}
-                    {formik.touched.title && formik.errors.title && <p className="text-red-500 text-xs mt-1">{formik.errors.title as string}</p>}
-                </div>
-
-                {/* Tác giả */}
-                <div>
-                    <label htmlFor="authorId" className="block text-sm font-bold text-gray-700 mb-1">Tác giả <span className="text-red-500">*</span></label>
-                    <select
-                    id="authorId"
-                    name="authorId"
-                    onChange={formik.handleChange}
-                    value={formik.values.authorId}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                    >
-                    <option value="">-- Chọn tác giả --</option>
-                    {authors.map((author) => (
-                        <option key={author.id} value={author.id}>{author.name}</option>
-                    ))}
-                    </select>
-                    {/* 6. Ép kiểu lỗi thành string */}
-                    {formik.touched.authorId && formik.errors.authorId && <p className="text-red-500 text-xs mt-1">{formik.errors.authorId as string}</p>}
-                </div>
-
-                {/* Trạng thái */}
-                <div>
-                    <label htmlFor="status" className="block text-sm font-bold text-gray-700 mb-1">Trạng thái</label>
-                    <select
-                    id="status"
-                    name="status"
-                    onChange={formik.handleChange}
-                    value={formik.values.status}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                    >
-                    <option value={1}>Đang tiến hành</option>
-                    <option value={2}>Đã hoàn thành</option>
-                    <option value={0}>Tạm ngưng</option>
-                    </select>
-                </div>
-              </div>
-
-              {/* Thể loại */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Thể loại <span className="text-red-500">*</span></label>
-                <div className="border border-gray-300 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center gap-2">
-                    <FaSearch className="text-gray-400 text-xs" />
-                    <input 
-                      type="text" 
-                      placeholder="Tìm thể loại..." 
-                      className="bg-transparent outline-none text-sm w-full"
-                      value={catSearch}
-                      onChange={(e) => setCatSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto p-2 grid grid-cols-2 gap-2 bg-white">
-                    {filteredCategories.map((cat) => (
-                      <label key={cat.id} className="flex items-center gap-2 p-2 hover:bg-blue-50 rounded cursor-pointer transition select-none">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                        <label htmlFor="title" className="block text-sm font-bold text-gray-700 mb-1">Tên truyện <span className="text-red-500">*</span></label>
                         <input 
-                          type="checkbox"
-                          checked={formik.values.categoryIds.includes(cat.id.toString())}
-                          onChange={() => handleCategoryCheck(cat.id.toString())}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            id="title"
+                            type="text" 
+                            name="title" 
+                            onChange={formik.handleChange} 
+                            value={formik.values.title} 
+                            className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500" 
                         />
-                        <span className="text-sm text-gray-700">{cat.name}</span>
-                      </label>
-                    ))}
-                  </div>
+                        {formik.errors.title && <p className="text-red-500 text-xs">{formik.errors.title}</p>}
+                    </div>
+                    <div>
+                        <label htmlFor="authorId" className="block text-sm font-bold text-gray-700 mb-1">Tác giả</label>
+                        <select 
+                            id="authorId"
+                            name="authorId" 
+                            onChange={formik.handleChange} 
+                            value={formik.values.authorId} 
+                            className="w-full border rounded-lg px-4 py-2 bg-white"
+                        >
+                            <option value="">-- Chọn tác giả --</option>
+                            {authors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="status" className="block text-sm font-bold text-gray-700 mb-1">Trạng thái</label>
+                        <select 
+                            id="status"
+                            name="status" 
+                            onChange={formik.handleChange} 
+                            value={formik.values.status} 
+                            className="w-full border rounded-lg px-4 py-2 bg-white"
+                        >
+                            <option value={1}>Đang tiến hành</option>
+                            <option value={2}>Hoàn thành</option>
+                            <option value={0}>Tạm ngưng</option>
+                        </select>
+                    </div>
                 </div>
-                {/* 7. Ép kiểu lỗi thành string */}
-                {formik.touched.categoryIds && formik.errors.categoryIds && <p className="text-red-500 text-xs mt-1">{formik.errors.categoryIds as string}</p>}
-              </div>
 
-              {/* Mô tả */}
-              <div>
-                <label htmlFor="description" className="block text-sm font-bold text-gray-700 mb-1">Mô tả</label>
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={5}
-                  onChange={formik.handleChange}
-                  value={formik.values.description}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
+                {/* Chọn thể loại */}
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Thể loại</label>
+                    <div className="border rounded-lg overflow-hidden h-48 bg-white flex flex-col">
+                        <div className="flex items-center px-3 border-b bg-gray-50">
+                            <FaSearch className="text-gray-400 mr-2" />
+                            <input 
+                                type="text" 
+                                placeholder="Tìm kiếm..." 
+                                className="p-2 text-sm outline-none bg-transparent w-full" 
+                                value={catSearch} 
+                                onChange={e => setCatSearch(e.target.value)} 
+                                aria-label="Tìm kiếm thể loại"
+                            />
+                        </div>
+                        <div className="overflow-y-auto p-2 grid grid-cols-2 gap-2">
+                            {filteredCategories.map(cat => (
+                                <label key={cat.id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer select-none">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={formik.values.categoryIds.includes(cat.id.toString())} 
+                                        onChange={() => handleCategoryCheck(cat.id.toString())} 
+                                        aria-label={`Chọn thể loại ${cat.name}`}
+                                    />
+                                    <span className="text-sm">{cat.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label htmlFor="description" className="block text-sm font-bold text-gray-700 mb-1">Mô tả</label>
+                    <textarea 
+                        id="description"
+                        name="description" 
+                        rows={4} 
+                        onChange={formik.handleChange} 
+                        value={formik.values.description} 
+                        className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-6 border-t gap-4">
-            <Link href="/admin/comics" className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium">
-              Hủy bỏ
-            </Link>
-            <button
-              type="submit"
-              disabled={formik.isSubmitting}
-              className="flex items-center gap-2 bg-blue-600 text-white px-8 py-2.5 rounded-lg hover:bg-blue-700 transition font-medium shadow-lg disabled:opacity-50"
-            >
-              <FaSave />
-              {formik.isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+          <div className="flex justify-end pt-4 border-t">
+            <button type="submit" disabled={formik.isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-md">
+              <FaSave /> {formik.isSubmitting ? 'Đang lưu...' : 'Lưu thông tin truyện'}
             </button>
           </div>
         </form>
+      </div>
+
+      {/* --- PHẦN 2: QUẢN LÝ CHAPTER --- */}
+      <div className="bg-white p-8 rounded-lg shadow-md border-t-4 border-green-500">
+        <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-bold text-gray-800">Danh sách chương ({chapters.length})</h2>
+            <Link 
+                href={`/admin/chapter/create?comicId=${comicId}`} 
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-medium shadow-sm"
+            >
+                <FaPlus /> Thêm chương mới
+            </Link>
+        </div>
+
+        <div className="overflow-hidden border rounded-lg">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-gray-100 text-gray-600 font-semibold uppercase">
+                    <tr>
+                        <th className="p-3 w-20 text-center">Số</th>
+                        <th className="p-3">Tên chương</th>
+                        <th className="p-3 w-40">Ngày đăng</th>
+                        <th className="p-3 w-32 text-center">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                    {chapters.length > 0 ? (
+                        // Sắp xếp chapter mới nhất lên đầu
+                        [...chapters].sort((a,b) => b.chapterNumber - a.chapterNumber).map((chap) => (
+                            <tr key={chap.id} className="hover:bg-gray-50 transition">
+                                <td className="p-3 text-center font-bold text-gray-700">{chap.chapterNumber}</td>
+                                <td className="p-3 font-medium text-gray-800">{chap.title}</td>
+                                <td className="p-3 text-gray-500">
+                                    {new Date(chap.publishDate).toLocaleDateString('vi-VN')}
+                                </td>
+                                <td className="p-3 text-center">
+                                    <div className="flex justify-center gap-2">
+                                        <Link 
+                                            href={`/admin/chapter/edit/${chap.id}`} 
+                                            className="p-2 text-blue-600 hover:bg-blue-100 rounded transition" 
+                                            title="Sửa chương"
+                                        >
+                                            <FaEdit />
+                                        </Link>
+                                        <button 
+                                            onClick={() => handleDeleteChapter(chap.id)}
+                                            className="p-2 text-red-600 hover:bg-red-100 rounded transition"
+                                            title="Xóa chương"
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))
+                    ) : (
+                        <tr>
+                            <td colSpan={4} className="p-8 text-center text-gray-400 bg-gray-50">
+                                Truyện này chưa có chương nào. Hãy thêm ngay!
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
       </div>
     </div>
   );

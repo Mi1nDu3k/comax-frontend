@@ -16,6 +16,7 @@ export interface Comic {
   description: string;
   thumbnailUrl: string; 
   slug: string;
+  authorId :string;
   authorName: string;   
   viewCount: number;    
   status: number;      

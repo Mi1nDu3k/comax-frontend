@@ -17,5 +17,16 @@ export const chapterService = {
   getByComicId: async (comicId: string) => {
     const response = await api.get<Chapter[]>(`/comics/${comicId}/chapters`);
     return response.data;
+  },
+  create: async (data: { comicId: number; title: string; content: string; chapterNumber: number }) => {
+    return await api.post('/chapters', data);
+  },
+
+  update: async (id: number, data: { title?: string; content?: string; chapterNumber?: number }) => {
+    return await api.put(`/chapters/${id}`, data);
+  },
+
+  delete: async (id: number) => {
+    return await api.delete(`/chapters/${id}`);
   }
 };

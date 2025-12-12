@@ -1,14 +1,6 @@
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// Nếu bạn chưa có thư viện jwt-decode, hãy cài: npm install jwt-decode
-// Hoặc logic lấy user đơn giản từ localStorage
-
-interface User {
-  id: number;
-  username: string;
-  avatar?: string;
-  // thêm các trường khác nếu cần
-}
+import { User } from '@/types/user'; // 1. Import User type chuẩn từ file types
 
 interface AuthContextType {
   user: User | null;
@@ -22,8 +14,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Logic khôi phục user từ localStorage khi F5 trang
+    // Khôi phục user từ localStorage khi F5
     const storedUser = localStorage.getItem('user');
+    // const storedToken = localStorage.getItem('accessToken'); // Có thể check thêm token nếu cần
+
     if (storedUser) {
         try {
             // eslint-disable-next-line
@@ -35,13 +29,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (token: string, userData: User) => {
-    localStorage.setItem('token', token);
+    // 2. Sửa key 'token' -> 'accessToken' để khớp với toàn bộ app
+    localStorage.setItem('accessToken', token); 
     localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
+    setUser(userData); // Cập nhật state -> Header sẽ tự render lại
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken'); // Sửa key
     localStorage.removeItem('user');
     setUser(null);
   };

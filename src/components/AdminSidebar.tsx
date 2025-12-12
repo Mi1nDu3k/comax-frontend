@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FaTachometerAlt, FaBook, FaUsers, FaArrowLeft } from 'react-icons/fa';
+import { FaBarcode } from 'react-icons/fa6';
 
 export default function AdminSidebar() {
   const pathname = usePathname();
@@ -10,6 +11,7 @@ export default function AdminSidebar() {
     { name: 'Dashboard', href: '/admin/dashboard', icon: FaTachometerAlt },
     { name: 'Quản lý User', href: '/admin/user', icon: FaUsers },
     { name: 'Quản lý Truyện', href: '/admin/comic', icon: FaBook },
+    { name: 'Quản lý Chương', href:'/admin/chapter',icon: FaBarcode},
   ];
 
   return (

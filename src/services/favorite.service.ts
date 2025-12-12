@@ -12,7 +12,7 @@ export const favoriteService = {
     return response.data; 
   },
   getMyFavorites: async () => {
-    const response = await api.get<Comic[]>('/favorite/me');
+    const response = await api.get<Comic[]>('/favorites/me');
     return response.data;
   },
   
