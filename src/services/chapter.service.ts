@@ -28,5 +28,14 @@ export const chapterService = {
 
   delete: async (id: number) => {
     return await api.delete(`/chapters/${id}`);
-  }
-};
+  },
+  createWithImages: async (formData: FormData) => {
+    const response = await api.post('/chapters', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+            },
+        timeout: 60000 * 5 
+        });
+    return response.data;
+}
+}

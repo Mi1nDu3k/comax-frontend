@@ -2,15 +2,12 @@ import api from '@/lib/axios';
 import { Notification } from '@/types/notification';
 
 export const notificationService = {
-  getAll: async (page = 1, pageSize = 20) => {
-    // Nếu chưa có API backend thì trả về mảng rỗng để không bị lỗi
-    try {
-        const response = await api.get<Notification[]>('/notifications', { params: { page, pageSize } });
-        return response.data;
-    } catch {
-        return [];
-    }
-  },
+  getAll: async (page = 1, pageSize = 5) => {
+    const response = await api.get(`/notifications?page=${page}&pageSize=${pageSize}`);
+    // Nếu backend trả về { data: [], totalCount: ... } thì return response.data.data
+    // Nếu backend trả về [] thì return response.data
+    return response.data.data || response.data; 
+},
   markAsRead: async (id: number) => {
     return await api.put(`/notifications/${id}/read`);
   },

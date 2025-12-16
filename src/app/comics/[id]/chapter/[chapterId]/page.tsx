@@ -2,16 +2,30 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { chapterService } from '@/services/chapter.service';
-import { Chapter } from '@/types/chapter';
+import { Chapter } from '@/types/chapter'; // Giữ nguyên import này
 import { FaArrowLeft, FaArrowRight, FaHome } from 'react-icons/fa';
 import Link from 'next/link';
 import Image from 'next/image';
+
+// 1. Định nghĩa thêm Interface cục bộ để tránh dùng ANY
+// (Giúp TypeScript hiểu cấu trúc trả về mà không cần sửa file types gốc ngay lập tức)
+interface PageItem {
+  id: number | string;
+  imageUrl?: string; // Có thể backend trả về imageUrl
+  url?: string;      // Hoặc trả về url
+  index: number;
+}
+
+// Mở rộng type Chapter để bao gồm mảng pages (nếu backend có trả về)
+interface ChapterDetail extends Chapter {
+  pages?: PageItem[];
+  images?: { url: string }[];
+}
 
 export default function ChapterReaderPage() {
   const params = useParams();
   const router = useRouter();
   
-  // Lấy params an toàn (Log ra để kiểm tra)
   const comicId = params?.id as string; 
   const rawChapterId = params?.chapterId;
   const chapterId = Number(rawChapterId);
@@ -20,14 +34,6 @@ export default function ChapterReaderPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Debug params
-  useEffect(() => {
-    console.log("Params nhận được:", params);
-    if (!comicId) console.error("Thiếu comicId (folder [id])");
-    if (!rawChapterId) console.error("Thiếu chapterId (folder [chapterId])");
-    if (isNaN(chapterId)) console.error("ChapterId không phải số:", rawChapterId);
-  }, [params, comicId, rawChapterId, chapterId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,38 +52,48 @@ export default function ChapterReaderPage() {
         setCurrentChapter(detailData);
         setChapters(listData);
 
-        // Xử lý Content ảnh (JSON hoặc String)
-        if (detailData && detailData.content) {
+        // --- XỬ LÝ ẢNH (TYPE SAFE) ---
+        let extractedImages: string[] = [];
+        
+        // Ép kiểu detailData sang Interface mở rộng đã định nghĩa ở trên
+        const data = detailData as unknown as ChapterDetail;
+
+        // 1. Ưu tiên: Check mảng 'pages'
+        if (data.pages && Array.isArray(data.pages) && data.pages.length > 0) {
+            extractedImages = data.pages
+                .sort((a, b) => a.index - b.index)
+                .map((p) => p.imageUrl || p.url || '') // Lấy link ảnh an toàn
+                .filter(url => url !== '');
+        } 
+        // 2. Fallback: Check trường 'content' cũ
+        else if (data.content) {
             try {
-                // Thử parse JSON
-                const imgs = JSON.parse(detailData.content);
-                setImages(Array.isArray(imgs) ? imgs : [detailData.content]);
+                const parsed = JSON.parse(data.content);
+                extractedImages = Array.isArray(parsed) ? parsed : [data.content];
             } catch {
-                // Nếu không phải JSON, tách theo dấu phẩy hoặc lấy nguyên chuỗi
-                if (detailData.content.includes(',')) {
-                    setImages(detailData.content.split(',').map((s: string) => s.trim()));
-                } else {
-                    setImages([detailData.content]);
-                }
+                extractedImages = data.content.includes(',') 
+                    ? data.content.split(',').map((s) => s.trim()) 
+                    : [data.content];
             }
         }
+
+        setImages(extractedImages.filter(img => img && img.length > 0));
+
       } catch (error) {
         console.error("Lỗi tải chương:", error);
       } finally {
-        setLoading(false); // Luôn tắt loading khi xong
+        setLoading(false);
       }
     };
 
     fetchData();
   }, [chapterId, comicId]);
 
-  // Logic chuyển chương (Sắp xếp theo ChapterNumber để chuẩn xác)
-  // Sắp xếp chapters tăng dần để tìm Next/Prev dễ hơn
+  // Logic chuyển chương
   const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
   const currentIndex = sortedChapters.findIndex(c => c.id === chapterId);
-  
-  const prevChapter = sortedChapters[currentIndex - 1]; // Chương số nhỏ hơn
-  const nextChapter = sortedChapters[currentIndex + 1]; // Chương số lớn hơn
+  const prevChapter = sortedChapters[currentIndex - 1];
+  const nextChapter = sortedChapters[currentIndex + 1];
 
   const handleChangeChapter = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newId = e.target.value;
@@ -93,11 +109,10 @@ export default function ChapterReaderPage() {
   
   if (!currentChapter) return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
-        <p className="text-xl mb-4">Không tìm thấy chương này.</p>
+        <p className="text-xl mb-4">Không tìm thấy nội dung chương.</p>
         <Link href={`/comics/${comicId}`} className="text-blue-400 hover:underline">
             Quay lại trang truyện
         </Link>
-        <p className="text-sm text-gray-500 mt-4">Debug ID: {comicId} - {chapterId}</p>
     </div>
   );
 
@@ -108,26 +123,25 @@ export default function ChapterReaderPage() {
         <Link 
           href={`/comics/${comicId}`} 
           className="flex items-center gap-2 hover:text-blue-400 transition"
-          aria-label="Về trang chi tiết truyện"
         >
             <FaHome /> <span className="hidden md:inline line-clamp-1">{currentChapter.title}</span>
         </Link>
         
         <div className="flex items-center gap-2">
             <button 
+                aria-label='Chapter trước'
                 disabled={!prevChapter}
                 onClick={() => router.push(`/comics/${comicId}/chapter/${prevChapter.id}`)}
                 className="p-2 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                aria-label="Chương trước"
             >
                 <FaArrowLeft />
             </button>
 
             <select 
+                aria-label='Chương'
                 value={currentChapter.id} 
                 onChange={handleChangeChapter}
                 className="bg-gray-700 border-none rounded py-2 px-2 md:px-4 outline-none max-w-[120px] md:max-w-[200px] cursor-pointer"
-                aria-label="Chọn chương"
             >
                 {sortedChapters.map(c => (
                     <option key={c.id} value={c.id}>Chương {c.chapterNumber}</option>
@@ -135,10 +149,10 @@ export default function ChapterReaderPage() {
             </select>
 
             <button 
+                aria-label='Chapter tiep theo'
                 disabled={!nextChapter}
                 onClick={() => router.push(`/comics/${comicId}/chapter/${nextChapter.id}`)}
                 className="p-2 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                aria-label="Chương sau"
             >
                 <FaArrowRight />
             </button>
@@ -146,40 +160,40 @@ export default function ChapterReaderPage() {
       </div>
 
       {/* Reader Content */}
-    <div className="max-w-4xl mx-auto bg-black min-h-screen">
-    {images.length > 0 ? (
-        images.map((imgUrl, index) => (
-            <div key={index} className="relative w-full">
-                {/* Dùng next/image với width/height auto */}
-                <Image
-                    src={imgUrl}
-                    alt={`Trang ${index + 1}`}
-                    width={0}
-                    height={0}
-                    sizes="100vw"
-                    style={{ width: '100%', height: 'auto' }} // CSS giúp ảnh scale theo chiều rộng
-                    loading={index < 2 ? "eager" : "lazy"} // Load ngay 2 ảnh đầu, lazy các ảnh sau
-                    quality={75} // Giảm chất lượng chút để load nhanh hơn (mặc định 75)
-                    unoptimized={true} // Bật cái này nếu ảnh lấy từ link ngoài (không phải local)
-                />
-            </div>
+      <div className="max-w-4xl mx-auto bg-black min-h-screen flex flex-col items-center">
+        {images.length > 0 ? (
+            images.map((imgUrl, index) => (
+                <div key={index} className="relative w-full">
+                    {/* Sửa lỗi eslint: dùng Next Image */}
+                    <Image
+                        src={imgUrl}
+                        alt={`Trang ${index + 1}`}
+                        width={0}
+                        height={0}
+                        sizes="100vw"
+                        className="w-full h-auto"
+                        loading={index < 2 ? "eager" : "lazy"}
+                        // Quan trọng: unoptimized giúp tránh lỗi config domain và behavior giống thẻ img thường nhưng chuẩn cú pháp Next
+                        unoptimized={true} 
+                    />
+                </div>
              ))
          ) : (
              <div className="p-20 text-center text-gray-500">
-                <p>Chưa có nội dung ảnh cho chương này.</p>
-                <p className="text-xs mt-2 text-gray-600">{currentChapter.content}</p>
+                <p>Không tải được ảnh.</p>
+                <p className="text-xs mt-2">ID: {chapterId}</p>
              </div>
          )}
       </div>
 
       {/* Footer Nav */}
-      <div className="max-w-4xl mx-auto p-6 flex justify-between items-center bg-gray-800 mt-8 rounded-lg">
+      <div className="max-w-4xl mx-auto p-6 flex justify-between items-center bg-gray-800 mt-8 rounded-lg mb-10">
          <button 
             disabled={!prevChapter}
             onClick={() => router.push(`/comics/${comicId}/chapter/${prevChapter.id}`)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 transition"
          >
-            <FaArrowLeft /> Chap trước
+            <FaArrowLeft /> Trước
          </button>
          
          <span className="font-bold text-lg">Chương {currentChapter.chapterNumber}</span>
@@ -189,7 +203,7 @@ export default function ChapterReaderPage() {
             onClick={() => router.push(`/comics/${comicId}/chapter/${nextChapter.id}`)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 transition"
          >
-            Chap sau <FaArrowRight />
+            Sau <FaArrowRight />
          </button>
       </div>
     </div>
