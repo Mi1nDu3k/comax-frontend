@@ -273,7 +273,7 @@ export default function CreateComicPage() {
 
           {/* Footer Actions */}
           <div className="flex justify-end pt-6 border-t gap-4">
-            <Link href="/admin/comics" className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium">
+            <Link href="/admin/comic" className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium">
               Hủy bỏ
             </Link>
             <button

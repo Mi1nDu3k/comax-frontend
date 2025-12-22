@@ -35,7 +35,8 @@ export default function LoginPage() {
                 id: Number(response.user.id) 
             };
 
-            login(response.token, userData);
+           login(response.token);
+           localStorage.setItem('user', JSON.stringify(userData));
         }
 
         

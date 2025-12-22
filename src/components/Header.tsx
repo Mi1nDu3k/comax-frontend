@@ -2,11 +2,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
-import { FaSearch, FaUser, FaBars, FaTimes, FaSignOutAlt, FaTachometerAlt, FaBell, FaCheck } from 'react-icons/fa'; 
+import { FaSearch, FaUser, FaBars, FaTimes, FaSignOutAlt, FaTachometerAlt, FaBell } from 'react-icons/fa'; 
 import { useAuth } from '@/context/auth.context';
-import { notificationService } from '@/services/notification.service'; // Import service
-import { Notification } from '@/types/notification'; // Import type
+import { notificationService } from '@/services/notification.service';
+import { Notification } from '@/types/notification';
 import Image from 'next/image';
+// Import helper xử lý ảnh MinIO
+import { getMinioUrl } from '@/utils/image-helper';
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -14,7 +16,6 @@ export default function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   
-  // --- THÊM STATE CHO NOTIFICATION ---
   const [showNotiMenu, setShowNotiMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -24,18 +25,15 @@ export default function Header() {
   const router = useRouter();
   
   const menuRef = useRef<HTMLDivElement>(null);
-  const notiRef = useRef<HTMLDivElement>(null); // Ref cho menu thông báo
+  const notiRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // eslint-disable-next-line
+     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-
-    // Xử lý click outside để đóng menu
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false);
       }
-      // Đóng menu thông báo khi click ra ngoài
       if (notiRef.current && !notiRef.current.contains(event.target as Node)) {
         setShowNotiMenu(false);
       }
@@ -44,24 +42,19 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // --- LOGIC TẢI THÔNG BÁO ---
   useEffect(() => {
     if (user) {
         const fetchNoti = async () => {
             try {
-                // Giả sử API hỗ trợ phân trang, lấy tạm 5 tin mới nhất
-                const data = await notificationService.getAll(1, 5); 
+                const data = await notificationService.getAll(1, 5) as Notification[]; 
                 setNotifications(data);
-                setUnreadCount(data.filter(n => !n.isRead).length);
+                const unread = data.filter((n: Notification) => !n.isRead).length;
+                setUnreadCount(unread);
             } catch (error) {
                 console.error("Lỗi tải thông báo header", error);
             }
         };
         fetchNoti();
-        
-        // (Tùy chọn) Có thể set interval để polling thông báo mới mỗi 30s
-        // const interval = setInterval(fetchNoti, 30000);
-        // return () => clearInterval(interval);
     }
   }, [user]);
 
@@ -122,7 +115,6 @@ export default function Header() {
 
           {user ? (
             <>
-                {/* --- 1. CHUÔNG THÔNG BÁO --- */}
                 <div className="relative" ref={notiRef}>
                     <button 
                         onClick={() => setShowNotiMenu(!showNotiMenu)}
@@ -137,7 +129,6 @@ export default function Header() {
                         )}
                     </button>
 
-                    {/* DROPDOWN NOTIFICATION */}
                     {showNotiMenu && (
                         <div className="absolute right-[-60px] md:right-0 mt-3 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 overflow-hidden animate-fadeIn z-50 origin-top-right">
                             <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -174,15 +165,20 @@ export default function Header() {
                     )}
                 </div>
 
-                {/* --- 2. USER MENU (Giữ nguyên) --- */}
                 <div className="relative" ref={menuRef}>
                   <button 
                     onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center gap-2 text-gray-700 hover:text-blue-600 focus:outline-none ml-2"
                   >
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold overflow-hidden relative border border-blue-200">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold overflow-hidden relative border border-blue-200 shadow-inner">
                       {user.avatar ? (
-                          <Image src={user.avatar} alt="User" fill className="object-cover" />
+                          <Image 
+                            src={getMinioUrl(user.avatar)} 
+                            alt="User Avatar" 
+                            fill 
+                            className="object-cover"
+                            unoptimized // Quan trọng: Sửa lỗi Private IP
+                          />
                       ) : (
                           user.username?.charAt(0).toUpperCase()
                       )}
@@ -194,7 +190,6 @@ export default function Header() {
 
                   {showUserMenu && (
                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 overflow-hidden animate-fadeIn z-50">
-                      {/* ... (Phần menu user giữ nguyên như code cũ) ... */}
                       {user.roleName === 'Admin' && (
                         <Link href="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 text-sm text-red-600 font-semibold bg-red-50 hover:bg-red-100" onClick={() => setShowUserMenu(false)}>
                           <FaTachometerAlt /> Quản trị viên
@@ -230,7 +225,6 @@ export default function Header() {
         </div>
       </div>
       
-      {/* Mobile Menu */}
       {showMobileMenu && (
         <div className="md:hidden bg-white border-t p-4 space-y-3 shadow-lg">
            {navLinks.map(link => (

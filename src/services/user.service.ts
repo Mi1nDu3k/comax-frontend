@@ -1,6 +1,13 @@
 import api from '@/lib/axios';
 import { User } from '@/types/user';
 
+// Định nghĩa kiểu trả về từ Backend (ServiceResponse)
+interface ServiceResponse<T> {
+  data: T;
+  success: boolean;
+  message: string;
+}
+
 export const userService = {
   // Lấy danh sách user (Admin)
   getAll: async () => {
@@ -26,5 +33,28 @@ export const userService = {
   // Hủy VIP
   downgradeVip: async (id: number) => {
     return await api.post(`/user/${id}/downgrade-vip`);
-  }
+  },
+
+  // Lấy profile
+  getProfile: async () => {
+    const res = await api.get<User>('/user/profile');
+    return res.data;
+  },
+
+  // Update thông tin (Mới)
+ updateProfile: async (username: string, email: string, avatarFile?: File) => {
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('email', email);
+    if (avatarFile) {
+      formData.append('avatarFile', avatarFile);
+    }
+
+    const response = await api.put('/user/profile', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };

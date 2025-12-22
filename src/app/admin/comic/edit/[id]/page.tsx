@@ -57,9 +57,14 @@ export default function EditComicPage() {
           description: comicData.description,
           // Lấy ID tác giả (fallback về rỗng nếu lỗi)
           authorId: comicData.authorId || '',
-          categoryIds: comicData.categories ? comicData.categories.map((c: Category) => c.id.toString()) : [],
-          status: typeof comicData.status === 'number' ? comicData.status : 1,
-          thumbnailUrl: comicData.thumbnailUrl
+          categoryIds: comicData.categoryIds 
+    ? comicData.categoryIds.map((id: number) => id.toString()) 
+    : (comicData.categories 
+        ? comicData.categories.map((c: Category) => c.id.toString()) 
+        : []),
+
+  status: typeof comicData.status === 'number' ? comicData.status : 1,
+  thumbnailUrl: comicData.thumbnailUrl
         });
 
       } catch (error) {
@@ -89,26 +94,31 @@ export default function EditComicPage() {
       authorId: Yup.string().required('Vui lòng chọn tác giả'),
       categoryIds: Yup.array().min(1, 'Chọn ít nhất 1 thể loại'),
     }),
-    onSubmit: async (values) => {
-      try {
-        const formData = new FormData();
-        formData.append('Title', values.title);
-        formData.append('Description', values.description);
-        formData.append('AuthorId', values.authorId.toString());
-        formData.append('Status', values.status.toString());
-        formData.append('CategoryID', JSON.stringify(values.categoryIds));
+   onSubmit: async (values) => {
+  try {
+    const formData = new FormData();
+    formData.append('Title', values.title);
+    formData.append('Description', values.description);
+    formData.append('AuthorId', values.authorId.toString());
+    formData.append('Status', values.status.toString());
+    if (values.categoryIds && values.categoryIds.length > 0) {
+      values.categoryIds.forEach((id) => {
+       
+        formData.append('CategoryIds', id.toString()); 
+      });
+    }
 
-        if (values.coverImageFile) {
-          formData.append('CoverImageFile', values.coverImageFile);
-        }
+    if (values.coverImageFile) {
+      formData.append('CoverImageFile', values.coverImageFile);
+    }
 
-        await comicService.update(comicId, formData);
-        toast.success('Cập nhật truyện thành công!');
-      } catch (error) {
-        console.error(error);
-        toast.error('Lỗi khi cập nhật truyện.');
-      }
-    },
+    await comicService.update(comicId, formData);
+    toast.success('Cập nhật truyện thành công!');
+  } catch (error) {
+    console.error(error);
+    toast.error('Lỗi khi cập nhật truyện.');
+  }
+},
   });
 
   // Xử lý xóa Chapter trực tiếp tại đây

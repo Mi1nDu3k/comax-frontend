@@ -4,8 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { chapterService } from '@/services/chapter.service';
-import { storageService } from '@/services/storage.service'; // Đảm bảo đã import service này
-import { FaArrowLeft, FaSave, FaCloudUploadAlt, FaTimes, FaSpinner, FaFolderOpen } from 'react-icons/fa';
+import { FaArrowLeft, FaCloudUploadAlt, FaTimes, FaSpinner, FaFolderOpen } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import Image from 'next/image';
 
@@ -17,19 +16,19 @@ function CreateChapterForm() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  // --- THÊM STATE TIẾN TRÌNH ---
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     if (!comicId) {
       toast.error('Không xác định được truyện!');
       router.push('/admin/comic');
     }
-    // Cleanup preview URLs khi unmount để tránh leak memory
     return () => {
       previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
   }, [comicId, router]);
 
-  // Hàm sắp xếp file theo tên (Natural Sort: 1, 2, 10 thay vì 1, 10, 2)
   const sortFiles = (files: File[]) => {
     return files.sort((a, b) => {
       return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
@@ -43,10 +42,8 @@ function CreateChapterForm() {
       
       setSelectedFiles(sortedFiles);
 
-      // Tạo preview
       const newPreviews = sortedFiles.map(file => URL.createObjectURL(file));
       setPreviewUrls(prev => {
-        // Xóa preview cũ
         prev.forEach(u => URL.revokeObjectURL(u));
         return newPreviews;
       });
@@ -59,7 +56,7 @@ function CreateChapterForm() {
     setSelectedFiles(newFiles);
 
     const newPreviews = [...previewUrls];
-    URL.revokeObjectURL(newPreviews[index]); // Cleanup
+    URL.revokeObjectURL(newPreviews[index]);
     newPreviews.splice(index, 1);
     setPreviewUrls(newPreviews);
   };
@@ -73,7 +70,7 @@ function CreateChapterForm() {
       title: Yup.string().required('Vui lòng nhập tên chương'),
       chapterNumber: Yup.number().typeError('Phải là số').required('Nhập số thứ tự chương'),
     }),
-   onSubmit: async (values) => {
+    onSubmit: async (values) => {
       if (!comicId) return;
       if (selectedFiles.length === 0) {
         toast.error("Chưa chọn ảnh!");
@@ -82,20 +79,21 @@ function CreateChapterForm() {
 
       try {
         setIsUploading(true);
+        setUploadProgress(0); // Reset tiến trình về 0
 
-        // 1. Tạo FormData
         const formData = new FormData();
         formData.append('ComicId', comicId);
         formData.append('Title', values.title);
         formData.append('ChapterNumber', values.chapterNumber);
 
-        // 2. Append từng file ảnh vào cùng 1 key 'Images'
         selectedFiles.forEach((file) => {
             formData.append('Images', file); 
         });
 
-        // 3. Gọi API GỘP (Không cần gọi upload riêng nữa)
-        await chapterService.createWithImages(formData);
+        // --- GỌI API VỚI CALLBACK TIẾN TRÌNH ---
+        await chapterService.createWithImages(formData, (percent) => {
+          setUploadProgress(percent);
+        });
 
         toast.success('Thêm chương thành công!');
         router.push(`/admin/comic/edit/${comicId}`);
@@ -125,7 +123,6 @@ function CreateChapterForm() {
       <div className="bg-white p-8 rounded-lg shadow-md">
         <form onSubmit={formik.handleSubmit} className="space-y-8">
           
-          {/* Thông tin cơ bản */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
                 <label htmlFor="chapterNumber" className="block text-sm font-bold text-gray-700 mb-1">
@@ -163,13 +160,11 @@ function CreateChapterForm() {
             </div>
           </div>
 
-          {/* Khu vực Upload */}
           <div className="border-t pt-6">
             <label className="block text-sm font-bold text-gray-700 mb-2">
                 Danh sách ảnh truyện <span className="text-red-500">*</span>
             </label>
             
-            {/* Input chọn file */}
             <div className="flex items-center gap-4 mb-4">
                 <input
                     type="file"
@@ -194,7 +189,6 @@ function CreateChapterForm() {
                 </span>
             </div>
 
-            {/* Preview Grid */}
             {previewUrls.length > 0 && (
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <p className="text-xs text-gray-500 mb-3 italic">
@@ -231,7 +225,24 @@ function CreateChapterForm() {
             )}
           </div>
 
-          {/* Action Buttons */}
+          {/* --- KHU VỰC PROGRESS BAR --- */}
+          {isUploading && (
+            <div className="mt-6 border-t pt-6">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold text-blue-700">
+                  {uploadProgress < 100 ? 'Đang tải ảnh lên...' : 'Đang xử lý dữ liệu trên server...'}
+                </span>
+                <span className="text-sm font-bold text-blue-700">{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out" 
+                  style={{ minHeight: '600px'}}
+                ></div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end pt-6 border-t gap-4">
             <button 
                 type="button" 
@@ -247,7 +258,7 @@ function CreateChapterForm() {
                 className="flex items-center gap-2 bg-green-600 text-white px-8 py-2.5 rounded-lg hover:bg-green-700 shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {isUploading ? <FaSpinner className="animate-spin" /> : <FaCloudUploadAlt />}
-              {isUploading ? 'Đang Upload & Lưu...' : 'Upload & Lưu Chương'}
+              {isUploading ? 'Đang xử lý...' : 'Upload & Lưu Chương'}
             </button>
           </div>
         </form>

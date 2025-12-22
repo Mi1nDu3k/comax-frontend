@@ -1,55 +1,71 @@
 'use client';
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types/user'; // 1. Import User type chuẩn từ file types
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { userService } from '@/services/user.service';
+import { User } from '@/types/user';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
-  user: User | null;
-  login: (token: string, userData: User) => void;
-  logout: () => void;
+    user: User | null;
+    loading: boolean;
+    login: (token: string) => Promise<void>;
+    logout: () => void;
+    refreshUser: () => Promise<void>; // <--- 1. THÊM DÒNG NÀY
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
-  useEffect(() => {
-    // Khôi phục user từ localStorage khi F5
-    const storedUser = localStorage.getItem('user');
-    // const storedToken = localStorage.getItem('accessToken'); // Có thể check thêm token nếu cần
-
-    if (storedUser) {
+    // Hàm load user từ token
+    const loadUserFromToken = async () => {
         try {
-            // eslint-disable-next-line
-            setUser(JSON.parse(storedUser));
-        } catch {
-            localStorage.removeItem('user');
+            const token = localStorage.getItem("accessToken");
+            if (token) {
+                const userData = await userService.getProfile();
+                setUser(userData);
+            }
+        } catch (error) {
+            console.error("Lỗi load user", error);
+            // localStorage.removeItem("accessToken"); // Tùy chọn: Xóa token nếu lỗi
+        } finally {
+            setLoading(false);
         }
-    }
-  }, []);
+    };
 
-  const login = (token: string, userData: User) => {
-    // 2. Sửa key 'token' -> 'accessToken' để khớp với toàn bộ app
-    localStorage.setItem('accessToken', token); 
-    localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData); // Cập nhật state -> Header sẽ tự render lại
-  };
+    useEffect(() => {
+        loadUserFromToken();
+    }, []);
 
-  const logout = () => {
-    localStorage.removeItem('accessToken'); // Sửa key
-    localStorage.removeItem('user');
-    setUser(null);
-  };
+    // 2. VIẾT HÀM REFRESH USER (Copy logic của loadUserFromToken)
+    const refreshUser = async () => {
+        await loadUserFromToken();
+    };
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+    const login = async (token: string) => {
+        localStorage.setItem('accessToken', token);
+        await loadUserFromToken();
+        router.push('/');
+    };
+
+    const logout = () => {
+        localStorage.removeItem('accessToken');
+        setUser(null);
+        router.push('/login');
+    };
+
+    // 3. EXPORT refreshUser
+    return (
+        <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
+    const context = useContext(AuthContext);
+    if (!context) throw new Error('useAuth must be used within AuthProvider');
+    return context;
 };

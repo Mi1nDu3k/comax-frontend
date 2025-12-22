@@ -20,6 +20,12 @@ export interface Comic {
   authorName: string;   
   viewCount: number;    
   status: number;      
+  categoryIds?: number[];
   categories: Category[];
   chapters?: ChapterItem[];
+  latestChapterNumber?: number; // Thêm dòng này
+  latestChapterDate?: string;
+  rating: number;
+  createdAt: string;
+  categoryNames: string[];
 }

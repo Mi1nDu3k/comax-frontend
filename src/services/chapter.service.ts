@@ -22,20 +22,23 @@ export const chapterService = {
     return await api.post('/chapters', data);
   },
 
-  update: async (id: number, data: { title?: string; content?: string; chapterNumber?: number }) => {
-    return await api.put(`/chapters/${id}`, data);
+  update: async (id: number | string, data: FormData) => {
+  const response = await api.put(`/chapters/${id}`, data);
+  return response.data;
   },
 
   delete: async (id: number) => {
     return await api.delete(`/chapters/${id}`);
   },
-  createWithImages: async (formData: FormData) => {
-    const response = await api.post('/chapters', formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data',
-            },
-        timeout: 60000 * 5 
-        });
-    return response.data;
-}
+  createWithImages: async (formData: FormData, onProgress: (percent: number) => void) => {
+    return await api.post('/chapter/create-with-images', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Theo dõi tiến trình upload của toàn bộ payload (bao gồm tất cả ảnh)
+      onUploadProgress: (progressEvent) => {
+        const total = progressEvent.total || 1;
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+        onProgress(percentCompleted); // Gửi phần trăm về component
+      },
+    });
+  },
 }

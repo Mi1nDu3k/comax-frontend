@@ -10,6 +10,7 @@ import CommentSection from '@/components/CommentSection';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import { useAuth } from '@/context/auth.context'; // Dùng Context để check login chuẩn hơn
 import { toast } from 'react-toastify';
+import StarRating from '@/components/home/StarRating';
 
 export default function ComicDetailPage() {
   const params = useParams();
@@ -96,6 +97,7 @@ export default function ComicDetailPage() {
           
           {/* Nút hành động */}
           <div className="flex gap-3 mb-6">
+
              <button 
                 onClick={handleToggleFavorite}
                 className={`flex items-center gap-2 px-4 py-2 rounded border transition font-medium
@@ -108,6 +110,28 @@ export default function ComicDetailPage() {
             <span className="bg-green-100 text-green-800 text-sm px-3 py-2 rounded flex items-center font-medium">
               👁️ {comic.viewCount.toLocaleString()} Lượt xem
             </span>
+  <div className="flex flex-col gap-2">
+  {/* 1. Hiển thị Rating */}
+ <div className="my-4">
+  <h3 className="text-lg font-semibold mb-2">Đánh giá của bạn:</h3>
+  <StarRating comicId={comic.id} initialRating={comic.rating} />
+</div>
+
+  {/* 2. Hiển thị Thể loại (Genre) */}
+  <div className="flex flex-wrap gap-2">
+    <span className="font-bold text-gray-700">Thể loại:</span>
+    {comic.categoryNames?.map((name, index) => (
+      <span key={index} className="px-2 py-1 bg-blue-100 text-blue-600 rounded-md text-xs">
+        {name}
+      </span>
+    ))}
+  </div>
+
+  {/* 3. Hiển thị Ngày xuất bản */}
+  <div className="text-sm text-gray-600">
+    <span className="font-bold">Ngày đăng:</span> {new Date(comic.createdAt).toLocaleDateString('vi-VN')}
+  </div>
+</div>
           </div>
 
           <p className="text-gray-700 mb-8 whitespace-pre-line leading-relaxed">{comic.description}</p>
