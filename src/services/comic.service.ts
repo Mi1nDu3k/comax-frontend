@@ -1,38 +1,72 @@
 import api from '@/lib/axios';
-import { Comic } from '@/types/comic';
-import { PaginationParams } from '@/types/common';
+import { Comic } from '@/types/comic'; // Đảm bảo bạn đã có file type này, nếu chưa có thì xem bên dưới
+
+// 1. Interface cho tham số tìm kiếm (Fix lỗi ESLint strict)
+export interface ComicQueryParams {
+  pageNumber?: number;
+  pageSize?: number;
+  searchTerm?: string;
+  categoryIds?: number[]; // Mảng số để lọc nhiều thể loại
+}
+
+// 2. Interface cho kết quả phân trang trả về từ Backend
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+}
 
 export const comicService = {
-  getAll: async (params?: PaginationParams) => {
-    const response = await api.get('/comics', { params });
-    return response.data;
+  // --- LẤY DANH SÁCH (CÓ PHÂN TRANG & LỌC) ---
+  getAll: async (params?: ComicQueryParams) => {
+    const response = await api.get<PagedResult<Comic>>('/comics', { 
+      params: params,
+      // Cấu hình này giúp Axios chuyển mảng [1, 2] thành "categoryIds=1&categoryIds=2"
+      // Đây là định dạng mà .NET Web API yêu cầu
+      paramsSerializer: {
+        indexes: null 
+      }
+    });
+    return response.data; 
   },
 
-  getById: async (id: string) => {
+  // --- LẤY CHI TIẾT THEO ID ---
+  getById: async (id: string | number) => {
     const response = await api.get<Comic>(`/comics/${id}`);
     return response.data;
   },
-  
-  getChapters: async (comicId: string) => {
-    const response = await api.get(`/comics/${comicId}/chapters`);
+
+  // --- LẤY CHI TIẾT THEO SLUG (SEO) ---
+  getBySlug: async (slug: string) => {
+    const response = await api.get<Comic>(`/comics/slug/${slug}`);
     return response.data;
   },
+
+  // --- TẠO MỚI (CÓ UPLOAD ẢNH) ---
+  create: async (data: FormData) => {
+    return await api.post<Comic>('/comics', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // --- CẬP NHẬT (CÓ UPLOAD ẢNH) ---
+  update: async (id: number, data: FormData) => {
+    return await api.put<Comic>(`/comics/${id}`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // --- XÓA ---
   delete: async (id: number) => {
-    // Gọi DELETE /api/comics/{id}
     return await api.delete(`/comics/${id}`);
   },
-  create: async (formData: FormData) => {
-    return await api.post('/comics', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      }
-    });
-  },
-  update: async (id: number, formData: FormData) => {
-    return await api.put(`/comics/${id}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      }
-    });
+
+  // --- TĂNG LƯỢT XEM ---
+  increaseView: async (id: number) => {
+    return await api.post(`/comics/${id}/view`);
   }
 };

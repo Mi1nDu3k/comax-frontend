@@ -99,6 +99,14 @@ export default function LoginPage() {
               <div className="text-red-500 text-xs mt-1">{formik.errors.password}</div>
             )}
           </div>
+          <div className="flex justify-end">
+            <Link 
+              href="/forgot-password" 
+              className="text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors"
+            >
+              Quên mật khẩu?
+            </Link>
+          </div>
 
           <button
             type="submit"

@@ -29,3 +29,21 @@ export interface Comic {
   createdAt: string;
   categoryNames: string[];
 }
+export interface ComicDetail {
+  id: number;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  authorName: string;
+  viewCount: number;
+  rating: number; // Điểm trung bình
+  status: string;
+  categoryNames: string[]; // Danh sách tên thể loại
+  chapters: {
+    id: number;
+    chapterNumber: number;
+    title: string;
+    slug: string;
+    publishDate: string;
+  }[];
+}

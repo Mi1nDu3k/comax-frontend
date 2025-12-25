@@ -31,7 +31,7 @@ export const chapterService = {
     return await api.delete(`/chapters/${id}`);
   },
   createWithImages: async (formData: FormData, onProgress: (percent: number) => void) => {
-    return await api.post('/chapter/create-with-images', formData, {
+    return await api.post('/chapters/create-with-images', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       // Theo dõi tiến trình upload của toàn bộ payload (bao gồm tất cả ảnh)
       onUploadProgress: (progressEvent) => {

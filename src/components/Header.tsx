@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
-import { FaSearch, FaUser, FaBars, FaTimes, FaSignOutAlt, FaTachometerAlt, FaBell } from 'react-icons/fa'; 
+import { FaSearch, FaUser, FaBars, FaTimes, FaSignOutAlt, FaTachometerAlt, FaBell } from 'react-icons/fa';
 import { useAuth } from '@/context/auth.context';
 import { notificationService } from '@/services/notification.service';
 import { Notification } from '@/types/notification';
 import Image from 'next/image';
-// Import helper xử lý ảnh MinIO
+import { useSignalR } from '@/hooks/useSignalR';
+import { toast } from 'react-toastify';
 import { getMinioUrl } from '@/utils/image-helper';
 
 export default function Header() {
@@ -24,11 +25,15 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   
+  // 1. Sử dụng Hook SignalR
+  const connection = useSignalR();
+  
   const menuRef = useRef<HTMLDivElement>(null);
   const notiRef = useRef<HTMLDivElement>(null);
 
+  // Xử lý click outside và mounted
   useEffect(() => {
-     // eslint-disable-next-line react-hooks/set-state-in-effect
+  //  eslint-disable-next-line
     setMounted(true);
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -42,6 +47,7 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Tải thông báo ban đầu
   useEffect(() => {
     if (user) {
         const fetchNoti = async () => {
@@ -57,6 +63,30 @@ export default function Header() {
         fetchNoti();
     }
   }, [user]);
+
+  // 2. Lắng nghe sự kiện Real-time từ SignalR
+  useEffect(() => {
+    if (connection) {
+      // "ReceiveNotification" phải khớp với tên sự kiện Backend gửi
+      connection.on("ReceiveNotification", (notification: Notification) => {
+        // A. Cập nhật danh sách thông báo (thêm vào đầu)
+        setNotifications(prev => [notification, ...prev]);
+        
+        // B. Tăng số lượng chưa đọc
+        setUnreadCount(prev => prev + 1);
+
+        // C. Hiện Popup Toast
+        toast.info(`🔔 ${notification.message}`);
+      });
+    }
+
+    // Cleanup: Gỡ bỏ listener khi unmount hoặc connection thay đổi
+    return () => {
+      if (connection) {
+        connection.off("ReceiveNotification");
+      }
+    };
+  }, [connection]);
 
   const handleLogout = () => {
     logout();
@@ -115,6 +145,7 @@ export default function Header() {
 
           {user ? (
             <>
+                {/* Notification Icon */}
                 <div className="relative" ref={notiRef}>
                     <button 
                         onClick={() => setShowNotiMenu(!showNotiMenu)}
@@ -165,6 +196,7 @@ export default function Header() {
                     )}
                 </div>
 
+                {/* User Menu */}
                 <div className="relative" ref={menuRef}>
                   <button 
                     onClick={() => setShowUserMenu(!showUserMenu)}
@@ -177,7 +209,7 @@ export default function Header() {
                             alt="User Avatar" 
                             fill 
                             className="object-cover"
-                            unoptimized // Quan trọng: Sửa lỗi Private IP
+                            unoptimized
                           />
                       ) : (
                           user.username?.charAt(0).toUpperCase()
@@ -225,6 +257,7 @@ export default function Header() {
         </div>
       </div>
       
+      {/* Mobile Menu */}
       {showMobileMenu && (
         <div className="md:hidden bg-white border-t p-4 space-y-3 shadow-lg">
            {navLinks.map(link => (

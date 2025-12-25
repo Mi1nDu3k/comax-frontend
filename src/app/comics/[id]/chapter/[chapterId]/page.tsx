@@ -168,7 +168,7 @@ export default function ChapterReaderPage() {
               width={1200}
               height={1800}
               sizes="100vw"
-              className="w-full h-auto block"
+              className="w-full h-auto block h-full"
               loading={index < 2 ? "eager" : "lazy"}
               unoptimized={true}
             />

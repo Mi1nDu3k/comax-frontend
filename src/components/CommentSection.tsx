@@ -1,13 +1,15 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react'; // Thêm useCallback
+import { useEffect, useState, useCallback } from 'react';
 import { commentService } from '@/services/comment.service';
 import { Comment } from '@/types/comment';
 import { useAuth } from '@/context/auth.context'; 
 import Image from 'next/image';
 import { FaPaperPlane, FaReply } from 'react-icons/fa';
 import { toast } from 'react-toastify'; 
+// 1. IMPORT HÀM XỬ LÝ ẢNH
+import { getMinioUrl } from '@/utils/image-helper';
 
-// --- COMPONENT CON ---
+// --- COMPONENT CON (Một dòng bình luận) ---
 const CommentItem = ({ comment, comicId }: { comment: Comment; comicId: number }) => {
   const { user } = useAuth();
   const [replies, setReplies] = useState<Comment[]>([]);
@@ -27,7 +29,7 @@ const CommentItem = ({ comment, comicId }: { comment: Comment; comicId: number }
       }
       setAreRepliesLoaded(true);
     } catch (error) {
-      console.error(error); // Log lỗi để không bị báo unused variable
+      console.error(error);
       toast.error("Không thể tải câu trả lời");
     }
   };
@@ -57,9 +59,17 @@ const CommentItem = ({ comment, comicId }: { comment: Comment; comicId: number }
 
   return (
     <div className="mb-6 flex gap-3">
+      {/* Avatar người bình luận gốc */}
       <div className="flex-shrink-0">
         <div className="relative w-10 h-10 rounded-full overflow-hidden border border-gray-200">
-           <Image src={comment.userAvatar || '/default-avatar.png'} alt={comment.userName} fill className="object-cover" />
+           {/* SỬA LỖI ẢNH TẠI ĐÂY */}
+           <Image 
+             src={getMinioUrl(comment.userAvatar)} 
+             alt={comment.userName} 
+             fill 
+             className="object-cover" 
+             unoptimized // Quan trọng: Tránh lỗi Private IP
+           />
         </div>
       </div>
 
@@ -87,7 +97,7 @@ const CommentItem = ({ comment, comicId }: { comment: Comment; comicId: number }
             <button 
                 type="submit" 
                 className="text-blue-600 p-2 hover:bg-blue-50 rounded"
-                aria-label="Gửi trả lời" // Thêm Aria Label
+                aria-label="Gửi trả lời"
             >
                 <FaPaperPlane />
             </button>
@@ -97,8 +107,16 @@ const CommentItem = ({ comment, comicId }: { comment: Comment; comicId: number }
         <div className="mt-2 ml-2 border-l-2 border-gray-200 pl-4">
           {replies.map((rep) => (
              <div key={rep.id} className="mb-3 flex gap-2">
+                {/* Avatar người trả lời */}
                 <div className="relative w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-1">
-                   <Image src={rep.userAvatar || '/default-avatar.png'} alt={rep.userName} fill className="object-cover" />
+                   {/* SỬA LỖI ẢNH TẠI ĐÂY */}
+                   <Image 
+                     src={getMinioUrl(rep.userAvatar)} 
+                     alt={rep.userName} 
+                     fill 
+                     className="object-cover" 
+                     unoptimized 
+                   />
                 </div>
                 <div>
                    <div className="bg-gray-50 p-2 rounded-lg">
@@ -133,7 +151,6 @@ export default function CommentSection({ comicId }: { comicId: number }) {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // Dùng useCallback để fix warning dependency
   const loadComments = useCallback(async (pageNum: number) => {
     try {
       setLoading(true);
@@ -155,7 +172,7 @@ export default function CommentSection({ comicId }: { comicId: number }) {
     loadComments(1);
     setPage(1);
     setHasMore(true);
-  }, [loadComments]); // Dependency giờ đã an toàn
+  }, [loadComments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +184,8 @@ export default function CommentSection({ comicId }: { comicId: number }) {
         comicId,
         content
       });
+      // Backend trả về comment mới, avatar có thể null hoặc đường dẫn tương đối
+      // Frontend sẽ tự động render qua getMinioUrl ở CommentItem
       setComments(prev => [newComment, ...prev]);
       setContent('');
       toast.success("Bình luận thành công!");
@@ -181,8 +200,18 @@ export default function CommentSection({ comicId }: { comicId: number }) {
       <h3 className="text-xl font-bold mb-6 border-b pb-2">Bình luận</h3>
 
       <form onSubmit={handleSubmit} className="mb-8 flex gap-4">
+        {/* Avatar User hiện tại đang gõ bình luận */}
         <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-           {user?.avatar && <Image src={user.avatar} alt="User" fill className="object-cover" />}
+           {user?.avatar && (
+             // SỬA LỖI ẢNH TẠI ĐÂY
+             <Image 
+               src={getMinioUrl(user.avatar)} 
+               alt="User" 
+               fill 
+               className="object-cover" 
+               unoptimized 
+             />
+           )}
         </div>
         <div className="flex-grow relative">
            <textarea
@@ -195,7 +224,7 @@ export default function CommentSection({ comicId }: { comicId: number }) {
              type="submit"
              disabled={!content.trim()}
              className="absolute bottom-3 right-3 text-blue-600 disabled:text-gray-400"
-             aria-label="Gửi bình luận" // Thêm Aria Label
+             aria-label="Gửi bình luận"
            >
              <FaPaperPlane size={20} />
            </button>

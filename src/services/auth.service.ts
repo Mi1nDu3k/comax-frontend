@@ -17,5 +17,20 @@ export const authService = {
   logout: () => {
     localStorage.removeItem('accessToken');
   },
+  forgotPassword: async (email: string) => {
+   
+    const response = await api.post('/user/forgot-password', { email });
+    return response.data;
+  },
+
+  // 2. Đặt lại mật khẩu mới
+  resetPassword: async (email: string, token: string, newPassword: string) => {
+    const response = await api.post('/user/reset-password', {
+      email,
+      token,
+      newPassword,
+    });
+    return response.data;
+  },
   
 };
