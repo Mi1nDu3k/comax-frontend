@@ -9,5 +9,5 @@ export interface AuthResponse {
   refreshToken: string;
   username: string;
   user: User;
-  // Các field khác trả về từ AuthService
+ 
 }

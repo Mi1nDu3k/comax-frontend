@@ -9,5 +9,10 @@ export const getMinioUrl = (url: string | null | undefined): string => {
   }
   const minioUrl = process.env.NEXT_PUBLIC_MINIO_URL || 'http://localhost:9000';
   const cleanPath = url.startsWith('/') ? url : `/${url}`;
-  return `${minioUrl}/comics-bucket${cleanPath}`;
+  if (cleanPath.startsWith('comics-bucket/')) {
+      return `${minioUrl}/${cleanPath}`;
+  }
+
+  // Nếu chưa có bucket thì nối vào
+  return `${minioUrl}/comics-bucket/${cleanPath}`;
 };

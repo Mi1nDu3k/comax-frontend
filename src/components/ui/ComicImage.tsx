@@ -33,7 +33,7 @@ export default function ComicImage({
         height={height}
         className={`transition-opacity duration-500 object-cover ${isLoading ? 'opacity-0' : 'opacity-100'}`}
         onLoad={() => setIsLoading(false)}
-        unoptimized={unoptimized} 
+        // unoptimized={unoptimized} 
       />
     </div>
   );

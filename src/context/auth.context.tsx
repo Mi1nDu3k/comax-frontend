@@ -9,7 +9,8 @@ interface AuthContextType {
     loading: boolean;
     login: (token: string) => Promise<void>;
     logout: () => void;
-    refreshUser: () => Promise<void>; // <--- 1. THÊM DÒNG NÀY
+    refreshUser: () => Promise<void>; 
+    accessToken: string | null; // Đã khai báo ở đây
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,19 +18,33 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+   
+    const [accessToken, setAccessToken] = useState<string | null>(null);
+    
     const router = useRouter();
 
-    // Hàm load user từ token
     const loadUserFromToken = async () => {
         try {
+            // Lấy token từ localStorage
             const token = localStorage.getItem("accessToken");
+            
             if (token) {
+                // Cập nhật state token ngay lập tức
+                setAccessToken(token); 
+                
+                // Gọi API lấy thông tin user
                 const userData = await userService.getProfile();
                 setUser(userData);
+            } else {
+                setAccessToken(null);
+                setUser(null);
             }
         } catch (error) {
             console.error("Lỗi load user", error);
-            // localStorage.removeItem("accessToken"); // Tùy chọn: Xóa token nếu lỗi
+            // Nếu token lỗi/hết hạn -> Xóa sạch để tránh vòng lặp
+            localStorage.removeItem("accessToken");
+            setAccessToken(null);
+            setUser(null);
         } finally {
             setLoading(false);
         }
@@ -39,26 +54,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loadUserFromToken();
     }, []);
 
-    // 2. VIẾT HÀM REFRESH USER (Copy logic của loadUserFromToken)
     const refreshUser = async () => {
         await loadUserFromToken();
     };
 
     const login = async (token: string) => {
         localStorage.setItem('accessToken', token);
+        setAccessToken(token); // Cập nhật state
         await loadUserFromToken();
         router.push('/');
     };
 
     const logout = () => {
         localStorage.removeItem('accessToken');
+        setAccessToken(null); // Xóa state
         setUser(null);
         router.push('/login');
     };
 
-    // 3. EXPORT refreshUser
     return (
-        <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+        <AuthContext.Provider value={{ 
+            user, 
+            loading, 
+            login, 
+            logout, 
+            refreshUser,
+            accessToken 
+        }}>
             {children}
         </AuthContext.Provider>
     );

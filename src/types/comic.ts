@@ -28,6 +28,11 @@ export interface Comic {
   rating: number;
   createdAt: string;
   categoryNames: string[];
+  updatedAt?: string;
+}
+export interface Genre {
+    id: number;
+    name: string;
 }
 export interface ComicDetail {
   id: number;

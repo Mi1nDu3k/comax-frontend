@@ -2,18 +2,28 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { chapterService } from '@/services/chapter.service';
+import { historyService } from '@/services/history.service';
+import { useAuth } from '@/context/auth.context';
 import { Chapter } from '@/types/chapter';
 import { FaArrowLeft, FaArrowRight, FaHome, FaSpinner } from 'react-icons/fa';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Page } from '@/types/chapter';
+
+interface Page {
+  index: number;
+  imageUrl: string;
+}
 
 export default function ChapterReaderPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   
-  const comicId = params?.id as string; 
+  const comicId = params?.id as string;
   const chapterId = Number(params?.chapterId);
+
+  // 1. Ref để chặn double-post
+  const hasLoggedRef = useRef<number | null>(null);
 
   const [currentChapter, setCurrentChapter] = useState<Chapter | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -24,6 +34,7 @@ export default function ChapterReaderPage() {
   
   const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // Scroll Progress
   useEffect(() => {
     const updateScroll = () => {
       const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -34,6 +45,7 @@ export default function ChapterReaderPage() {
     return () => window.removeEventListener("scroll", updateScroll);
   }, []);
 
+  // Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       if (!chapterId || !comicId || isNaN(chapterId)) {
@@ -53,7 +65,6 @@ export default function ChapterReaderPage() {
         setChapters(listData);
 
         let extractedImages: string[] = [];
-        // FIX LỖI ANY: Ép kiểu hoặc dùng interface Page
         if (detailData.pages && detailData.pages.length > 0) {
           extractedImages = [...detailData.pages]
             .sort((a: Page, b: Page) => a.index - b.index)
@@ -69,6 +80,7 @@ export default function ChapterReaderPage() {
           }
         }
         setImages(extractedImages.filter(img => img && img.length > 0));
+
       } catch (error) {
         console.error("Lỗi tải chương:", error);
       } finally {
@@ -80,11 +92,39 @@ export default function ChapterReaderPage() {
     window.scrollTo(0, 0);
   }, [chapterId, comicId]);
 
+  // 3. LOGIC GHI LỊCH SỬ (ĐÃ FIX CHECK TRÙNG)
+  useEffect(() => {
+    // Điều kiện cơ bản: Phải load xong, có dữ liệu, có user
+    if (loading || !currentChapter || !user || isNaN(Number(comicId))) return;
+
+    const finalComicId = currentChapter.comicId || Number(comicId);
+    
+    // --- CHẶN GỬI 2 LẦN ---
+    // Nếu ID chương hiện tại trùng với ID đã log trong Ref -> Dừng lại
+    if (hasLoggedRef.current === chapterId) {
+        return; 
+    }
+
+    if (finalComicId) {
+        // Cập nhật Ref ngay lập tức để chặn lần gọi tiếp theo
+        hasLoggedRef.current = chapterId;
+
+        console.log(`[History] Gửi request lưu Chap ${chapterId}`);
+        
+        historyService.saveHistory({
+            comicId: finalComicId,
+            chapterId: chapterId
+        });
+    }
+  }, [loading, currentChapter, user, comicId, chapterId]);
+  
+  // Logic chuyển chương
   const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
   const currentIndex = sortedChapters.findIndex(c => c.id === chapterId);
   const prevChapter = sortedChapters[currentIndex - 1];
   const nextChapter = sortedChapters[currentIndex + 1];
 
+  // Auto-next chapter
   useEffect(() => {
     if (!nextChapter || loading || isTransitioning) return;
 
@@ -120,22 +160,20 @@ export default function ChapterReaderPage() {
           </Link>
           
           <div className="flex items-center gap-2">
-            {/* FIX LỖI ACCESSIBILITY: Thêm title */}
             <button 
                 title="Chương trước"
                 disabled={!prevChapter} 
                 onClick={() => router.push(`/comics/${comicId}/chapter/${prevChapter.id}`)} 
-                className="p-2 bg-gray-700 rounded disabled:opacity-30"
+                className="p-2 bg-gray-700 rounded disabled:opacity-30 hover:bg-gray-600 transition"
             >
                 <FaArrowLeft />
             </button>
             
             <select 
                 title="Chọn chương"
-                aria-label="Chọn chương"
                 value={currentChapter?.id} 
                 onChange={(e) => router.push(`/comics/${comicId}/chapter/${e.target.value}`)} 
-                className="bg-gray-700 rounded py-2 px-2 outline-none cursor-pointer"
+                className="bg-gray-700 rounded py-2 px-2 outline-none cursor-pointer hover:bg-gray-600 transition"
             >
               {sortedChapters.map(c => <option key={c.id} value={c.id}>Chương {c.chapterNumber}</option>)}
             </select>
@@ -144,51 +182,55 @@ export default function ChapterReaderPage() {
                 title="Chương sau"
                 disabled={!nextChapter} 
                 onClick={() => router.push(`/comics/${comicId}/chapter/${nextChapter.id}`)} 
-                className="p-2 bg-gray-700 rounded disabled:opacity-30"
+                className="p-2 bg-gray-700 rounded disabled:opacity-30 hover:bg-gray-600 transition"
             >
                 <FaArrowRight />
             </button>
           </div>
         </div>
         <div className="w-full h-1 bg-gray-700">
-          {/* Đối với scrollProgress, inline style là chấp nhận được vì nó thay đổi liên tục */}
           <div className="h-full bg-blue-500 transition-all duration-150" style={{ width: `${scrollProgress}%` }}></div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto bg-black min-h-screen flex flex-col items-center w-full">
+      <div className="max-w-4xl mx-auto bg-black min-h-screen flex flex-col items-center w-full shadow-2xl">
         {images.map((imgUrl, index) => (
           <div 
             key={index} 
-            className="relative w-full bg-gray-800 flex items-center justify-center min-h-[600px]"
+            className="relative w-full bg-gray-800 flex items-center justify-center min-h-[400px]"
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={imgUrl}
               alt={`Trang ${index + 1}`}
-              width={1200}
-              height={1800}
-              sizes="100vw"
-              className="w-full h-auto block h-full"
+              className="w-full h-auto block"
               loading={index < 2 ? "eager" : "lazy"}
-              unoptimized={true}
             />
           </div>
         ))}
 
-        <div ref={sentinelRef} className="w-full py-10 flex flex-col items-center justify-center bg-gray-900">
+        <div ref={sentinelRef} className="w-full py-16 flex flex-col items-center justify-center bg-gray-900 border-t border-gray-800">
           {nextChapter ? (
             <div className="text-center p-8">
               {isTransitioning ? (
                 <div className="flex flex-col items-center gap-3">
-                  <FaSpinner className="animate-spin text-3xl text-blue-500" />
-                  <p className="text-xl font-bold">Đang chuẩn bị chương {nextChapter.chapterNumber}...</p>
+                  <FaSpinner className="animate-spin text-4xl text-blue-500" />
+                  <p className="text-xl font-bold text-white">Đang mở chương {nextChapter.chapterNumber}...</p>
                 </div>
               ) : (
-                <p className="text-gray-400">Cuộn thêm để sang chương tiếp theo</p>
+                <div className="animate-bounce flex flex-col items-center gap-2 opacity-70">
+                    <FaArrowRight className="rotate-90 text-2xl" />
+                    <p className="text-gray-400">Cuộn xuống để sang chương tiếp theo</p>
+                </div>
               )}
             </div>
           ) : (
-            <p className="p-8 text-gray-500 italic">Bạn đã đọc hết chương mới nhất.</p>
+            <div className="p-8 text-center">
+                <p className="text-xl font-bold text-gray-300 mb-4">Bạn đã đọc hết chương mới nhất!</p>
+                <Link href={`/comics/${comicId}`} className="px-6 py-2 bg-blue-600 rounded text-white hover:bg-blue-700 transition">
+                    Quay về trang truyện
+                </Link>
+            </div>
           )}
         </div>
       </div>

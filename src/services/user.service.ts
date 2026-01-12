@@ -1,5 +1,6 @@
 import api from '@/lib/axios';
 import { User } from '@/types/user';
+import { ReadingHistoryItem } from '@/types/history';
 
 // Định nghĩa kiểu trả về từ Backend (ServiceResponse)
 interface ServiceResponse<T> {
@@ -57,4 +58,13 @@ export const userService = {
     });
     return response.data;
   },
+  getReadingHistory: async () => {
+    const response = await api.get<ReadingHistoryItem[]>('/history');
+    return response.data;
+  },
+
+  // Lưu lịch sử (Gọi khi vào trang đọc truyện)
+  saveReadingHistory: async (comicId: number, chapterId: number) => {
+    return await api.post('/history', { comicId, chapterId });
+  }
 };

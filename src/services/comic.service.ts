@@ -33,7 +33,12 @@ export const comicService = {
     });
     return response.data; 
   },
-
+  /// --- TÌM KIẾM ---
+search: async (keyword: string) => {
+    // Gọi endpoint: /api/comics/search?q=abc
+    const response = await api.get<Comic[]>(`/comics/search?q=${encodeURIComponent(keyword)}`);
+    return response.data;
+  },
   // --- LẤY CHI TIẾT THEO ID ---
   getById: async (id: string | number) => {
     const response = await api.get<Comic>(`/comics/${id}`);

@@ -1,32 +1,44 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-// Thay Image bằng ComicImage và thêm Skeleton
 import ComicImage from '@/components/ui/ComicImage'; 
 import Skeleton from '@/components/ui/Skeleton';
-
 import { Comic, ChapterItem } from '@/types/comic'; 
+import { ReadingHistoryItem } from '@/types/history';
 import CommentSection from '@/components/CommentSection';
-import { FaHeart, FaRegHeart } from 'react-icons/fa';
-import { useAuth } from '@/context/auth.context';
+import { FaHeart, FaRegHeart, FaBookOpen, FaHistory, FaAngleDoubleRight } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api from '@/lib/axios';
 import StarRating from '@/components/home/StarRating';
+import { useAuth } from '@/context/auth.context'; // Giả sử bạn có hook này để check login
+
+// 1. Đưa Skeleton ra ngoài để tránh Re-creation
+const DetailSkeleton = () => (
+  <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="flex flex-col md:flex-row gap-8">
+      <div className="w-full md:w-1/3 lg:w-1/4"><Skeleton className="w-full aspect-[2/3] rounded-lg shadow-lg" /></div>
+      <div className="flex-1 space-y-4">
+         <Skeleton className="h-10 w-3/4 rounded" /><Skeleton className="h-6 w-1/3 rounded" />
+         <div className="flex gap-3 py-2"><Skeleton className="h-10 w-32 rounded" /><Skeleton className="h-10 w-32 rounded" /></div>
+         <Skeleton className="h-32 w-full rounded" />
+      </div>
+    </div>
+  </div>
+);
 
 export default function ComicDetailPage() {
   const params = useParams();
   const comicId = Number(params.id);
+  const { user } = useAuth(); // Lấy user để biết có nên gọi API cá nhân không
 
   const [comic, setComic] = useState<Comic | null>(null);
   const [chapters, setChapters] = useState<ChapterItem[]>([]); 
   const [loading, setLoading] = useState(true);
-  
-  // State cho chức năng Yêu thích & Đánh giá
+  const [lastReadChapter, setLastReadChapter] = useState<ReadingHistoryItem | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [myRating, setMyRating] = useState(0); 
 
-  // --- 1. Load dữ liệu khi vào trang ---
   useEffect(() => {
     if (!comicId) return;
 
@@ -34,37 +46,54 @@ export default function ComicDetailPage() {
       try {
         setLoading(true);
 
-        // A. Lấy thông tin chi tiết truyện
-        const comicRes = await api.get(`/comics/${comicId}`);
+        // --- BƯỚC 1: Lấy thông tin chính (Truyện) ---
+        const comicRes = await api.get<Comic>(`/comics/${comicId}`);
         const comicData = comicRes.data;
         setComic(comicData);
 
-        // Xử lý lấy danh sách chương
-        if (comicData.chapters && comicData.chapters.length > 0) {
-            setChapters(comicData.chapters);
-        } else {
-            try {
-                const chapRes = await api.get(`/comics/${comicId}/chapters`);
-                setChapters(chapRes.data);
-            } catch (error) {
-                console.log("Không tải được danh sách chương phụ hoặc truyện chưa có chương");
+        // Xử lý danh sách chương (Ưu tiên lấy từ comicData nếu có, không thì gọi API riêng)
+        let initialChapters = comicData.chapters || [];
+        
+        // --- BƯỚC 2: Gọi song song các API phụ (Chapters, Favorite, Rating, History) ---
+        // Sử dụng Promise.allSettled để 1 cái lỗi không làm chết các cái khác
+        const promises = [
+            // 1. Nếu chưa có chapters thì gọi thêm
+            (initialChapters.length === 0) ? api.get(`/comics/${comicId}/chapters`) : Promise.resolve({ data: initialChapters })
+        ];
+
+        // Chỉ gọi các API cá nhân nếu user đã đăng nhập
+        if (user) {
+            promises.push(api.get(`/favorites/check/${comicId}`)); // 2. Check Favorite
+            promises.push(api.get(`/rating/check/${comicId}`));    // 3. Check Rating
+            promises.push(api.get('/history'));                    // 4. Check History
+        }
+
+        const results = await Promise.allSettled(promises);
+
+        // --- BƯỚC 3: Xử lý kết quả trả về ---
+        
+        // [0] Chapters
+        if (results[0].status === 'fulfilled') {
+            // Nếu gọi API chapter riêng thì lấy data, còn nếu là Promise.resolve thì lấy data gốc
+            const chapData = results[0].value.data;
+            setChapters(Array.isArray(chapData) ? chapData : []);
+        }
+
+        if (user) {
+            // [1] Favorite
+            if (results[1] && results[1].status === 'fulfilled') {
+                setIsFavorite(results[1].value.data.isFavorited);
             }
-        }
-
-        // B. Kiểm tra User đã thích truyện chưa
-        try {
-            const favRes = await api.get(`/favorites/check/${comicId}`);
-            setIsFavorite(favRes.data.isFavorited);
-        } catch (err) {
-            // Bỏ qua lỗi 401
-        }
-
-        // C. Lấy điểm User đã đánh giá
-        try {
-            const rateRes = await api.get(`/rating/check/${comicId}`);
-            setMyRating(rateRes.data.score); 
-        } catch (_) {
-            // Bỏ qua lỗi 401
+            // [2] Rating
+            if (results[2] && results[2].status === 'fulfilled') {
+                setMyRating(results[2].value.data.score);
+            }
+            // [3] History
+            if (results[3] && results[3].status === 'fulfilled') {
+                const historyList: ReadingHistoryItem[] = results[3].value.data;
+                const found = historyList.find(h => h.comicId === comicId);
+                if (found) setLastReadChapter(found);
+            }
         }
 
       } catch (error) {
@@ -75,155 +104,158 @@ export default function ComicDetailPage() {
     };
 
     fetchData();
-  }, [comicId]);
+  }, [comicId, user]); // Thêm user vào dependency
 
-  // --- 2. Xử lý Toggle Favorite ---
   const handleToggleFavorite = async () => {
+    if (!user) return toast.error("Vui lòng đăng nhập để sử dụng tính năng này!");
+    
+    // Optimistic Update (Cập nhật UI trước khi gọi API cho mượt)
+    const previousState = isFavorite;
+    setIsFavorite(!isFavorite); 
+
     try {
       await api.post(`/favorites/${comicId}`);
-      setIsFavorite(!isFavorite); 
-      toast.success(isFavorite ? "Đã bỏ theo dõi" : "Đã thêm vào yêu thích");
+      toast.success(!previousState ? "Đã thêm vào yêu thích" : "Đã bỏ theo dõi");
     } catch (error) {
-      toast.error("Vui lòng đăng nhập để sử dụng tính năng này!");
+      setIsFavorite(previousState); // Revert nếu lỗi
+      toast.error("Lỗi kết nối, vui lòng thử lại!");
     }
   };
 
-  // --- 3. Tạo Skeleton cho trang chi tiết ---
-  const DetailSkeleton = () => (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Skeleton Ảnh bìa */}
-        <div className="w-full md:w-1/3 lg:w-1/4">
-           <Skeleton className="w-full aspect-[2/3] rounded-lg shadow-lg" />
-        </div>
-        
-        {/* Skeleton Thông tin */}
-        <div className="flex-1 space-y-4">
-           <Skeleton className="h-10 w-3/4 rounded" /> {/* Tên truyện */}
-           <Skeleton className="h-6 w-1/3 rounded" />  {/* Tác giả */}
-           
-           <div className="flex gap-3 py-2">
-              <Skeleton className="h-10 w-32 rounded" /> {/* Nút theo dõi */}
-              <Skeleton className="h-10 w-32 rounded" /> {/* Lượt xem */}
-           </div>
+  // 2. Tối ưu: Chỉ sort lại khi chapters thay đổi
+  const sortedChapters = useMemo(() => {
+    return [...chapters].sort((a, b) => b.chapterNumber - a.chapterNumber);
+  }, [chapters]);
 
-           <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-              <Skeleton className="h-6 w-48" /> {/* Rating title */}
-              <Skeleton className="h-8 w-64" /> {/* Stars */}
-              <div className="flex gap-2">
-                 <Skeleton className="h-6 w-20 rounded-full" />
-                 <Skeleton className="h-6 w-20 rounded-full" />
-              </div>
-           </div>
+  const latestChapter = sortedChapters.length > 0 ? sortedChapters[0] : null;
+  const firstChapter = sortedChapters.length > 0 ? sortedChapters[sortedChapters.length - 1] : null;
 
-           <Skeleton className="h-32 w-full rounded" /> {/* Mô tả */}
-
-           <Skeleton className="h-8 w-48 mt-8 mb-4" /> {/* Title Chapter */}
-           <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                 <Skeleton key={i} className="h-12 w-full rounded" />
-              ))}
-           </div>
-        </div>
-      </div>
-    </div>
-  );
-  
-  // --- 4. Render ---
   if (loading) return <DetailSkeleton />;
-  if (!comic) return <div className="text-red-500 text-center p-10">Không tìm thấy truyện.</div>;
+  if (!comic) return <div className="text-red-500 text-center p-10 font-medium">Không tìm thấy truyện hoặc truyện đã bị xóa.</div>;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl animate-fade-in">
       <div className="flex flex-col md:flex-row gap-8">
-        {/* CỘT TRÁI: ẢNH BÌA */}
-        <div className="w-full md:w-1/3 lg:w-1/4">
-          <div className="rounded-lg overflow-hidden shadow-lg relative aspect-[2/3]">
-             {/* SỬ DỤNG COMIC IMAGE */}
-             <ComicImage 
-               src={comic.thumbnailUrl || ''} 
-               alt={comic.title} 
-               fill
-               className="object-cover"
-               unoptimized
-             />
+        {/* Cột trái: Ảnh bìa */}
+        <div className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0">
+          <div className="rounded-lg overflow-hidden shadow-xl relative aspect-[2/3] border border-gray-100">
+             <ComicImage src={comic.thumbnailUrl || ''} alt={comic.title} fill className="object-cover" unoptimized />
+             {/* Label trạng thái */}
+             <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
+                {comic.status === 1 ? 'Đang tiến hành' : 'Hoàn thành'}
+             </div>
           </div>
         </div>
         
-        {/* CỘT PHẢI: THÔNG TIN CHI TIẾT */}
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold mb-2 text-gray-900">{comic.title}</h1>
-          <p className="text-gray-600 mb-4">Tác giả: <span className="font-semibold text-gray-800">{comic.authorName || 'Đang cập nhật'}</span></p>
+        {/* Cột phải: Thông tin */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-3xl md:text-4xl font-extrabold mb-3 text-gray-900 leading-tight">{comic.title}</h1>
           
-          {/* Nút hành động */}
-          <div className="flex flex-col gap-4 mb-6">
-             <div className="flex gap-3">
-                <button 
-                    onClick={handleToggleFavorite}
-                    className={`flex items-center gap-2 px-4 py-2 rounded border transition font-medium
-                    ${isFavorite ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}
-                    `}
-                >
-                    {isFavorite ? <FaHeart /> : <FaRegHeart />}
-                    {isFavorite ? 'Đang theo dõi' : 'Theo dõi'}
-                </button>
-                <span className="bg-green-100 text-green-800 text-sm px-3 py-2 rounded flex items-center font-medium">
-                👁️ {comic.viewCount?.toLocaleString() || 0} Lượt xem
-                </span>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-6">
+             <p>Tác giả: <span className="font-semibold text-blue-600">{comic.authorName || 'Đang cập nhật'}</span></p>
+             <span className="hidden md:inline text-gray-300">|</span>
+             <p className="flex items-center gap-1"><span className="text-yellow-500">★</span> {comic.rating?.toFixed(1) || '0.0'}</p>
+             <span className="hidden md:inline text-gray-300">|</span>
+             <p>👁️ {comic.viewCount?.toLocaleString() || 0} View</p>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-8">
+              <div className="flex gap-3">
+                 {/* Logic nút Đọc */}
+                 {lastReadChapter ? (
+                     <Link href={`/comics/${comicId}/chapter/${lastReadChapter.chapterId}`} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                         <FaHistory /> Đọc tiếp Chap {lastReadChapter.chapterNumber}
+                     </Link>
+                 ) : (
+                     firstChapter && (
+                         <Link href={`/comics/${comicId}/chapter/${firstChapter.id}`} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                             <FaBookOpen /> Đọc từ đầu
+                         </Link>
+                     )
+                 )}
+                 {latestChapter && (
+                     <Link href={`/comics/${comicId}/chapter/${latestChapter.id}`} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white border border-red-500 text-red-500 font-bold rounded-xl hover:bg-red-50 transition-all">
+                         Mới nhất: Chap {latestChapter.chapterNumber}
+                     </Link>
+                 )}
+              </div>
+
+              {/* Follow Button */}
+              <button 
+                onClick={handleToggleFavorite} 
+                className={`flex-1 sm:flex-none px-6 py-3 rounded-xl border font-bold flex items-center justify-center gap-2 transition-all ${
+                    isFavorite 
+                    ? 'bg-pink-50 border-pink-200 text-pink-600 hover:bg-pink-100' 
+                    : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                 {isFavorite ? <FaHeart className="text-pink-500" /> : <FaRegHeart />} 
+                 {isFavorite ? 'Đã theo dõi' : 'Theo dõi'}
+              </button>
+          </div>
+
+          {/* Rating & Categories */}
+          <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 mb-6">
+             <div className="flex items-center gap-4 mb-3">
+                <span className="font-semibold text-gray-700">Đánh giá:</span>
+                <StarRating comicId={comic.id} initialRating={myRating} />
              </div>
+             <div className="flex flex-wrap gap-2">
+                {comic.categoryNames?.map((cat, index) => (
+                    <span key={index} className="px-3 py-1 bg-white border border-blue-100 text-blue-600 text-xs font-medium rounded-full hover:border-blue-300 transition cursor-default">
+                        {cat}
+                    </span>
+                ))}
+             </div>
+          </div>
 
-             <div className="flex flex-col gap-2 bg-gray-50 p-4 rounded-lg">
-                {/* 1. Hiển thị Rating */}
-                <div>
-                    <h3 className="text-sm font-semibold mb-1 text-gray-700">Đánh giá của bạn:</h3>
-                    <StarRating comicId={comic.id} initialRating={myRating} />
-                </div>
+          <div className="prose max-w-none text-gray-600 mb-10 leading-relaxed">
+             <h3 className="text-lg font-bold text-gray-900 mb-2">Sơ lược</h3>
+             <p className="whitespace-pre-line">{comic.description || 'Chưa có mô tả cho truyện này.'}</p>
+          </div>
 
-                {/* 2. Hiển thị Thể loại */}
-                <div className="flex flex-wrap gap-2 mt-2">
-                    {comic.categoryNames && comic.categoryNames.length > 0 ? (
-                        comic.categoryNames.map((cat, index) => (
-                            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full cursor-pointer hover:bg-blue-200">
-                            {cat}
+          {/* Danh sách chương */}
+          <div id="chapters">
+             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <FaBookOpen className="text-blue-600" /> Danh sách chương 
+                <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{chapters.length}</span>
+             </h3>
+             <div className="flex flex-col border border-gray-200 rounded-xl overflow-hidden bg-white max-h-[600px] overflow-y-auto custom-scrollbar">
+                {sortedChapters.length > 0 ? (
+                   sortedChapters.map((chapter) => {
+                      const isReading = Number(lastReadChapter?.chapterId) === Number(chapter.id);
+                      return (
+                         <Link 
+                            href={`/comics/${comicId}/chapter/${chapter.id}`} 
+                            key={chapter.id} 
+                            className={`flex justify-between items-center p-4 border-b last:border-0 hover:bg-gray-50 transition-colors ${
+                                isReading ? 'bg-blue-50/60' : ''
+                            }`}
+                         >
+                            <div className="flex items-center gap-3">
+                                <span className={`font-medium ${isReading ? 'text-blue-600' : 'text-gray-700'}`}>
+                                    Chương {chapter.chapterNumber}
+                                </span>
+                                {chapter.title && <span className="text-gray-400 hidden sm:inline">- {chapter.title}</span>}
+                                {isReading && <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded font-bold uppercase">Đang đọc</span>}
+                            </div>
+                            <span className="text-xs text-gray-400 font-mono">
+                                {new Date(chapter.publishDate).toLocaleDateString('vi-VN')}
                             </span>
-                        ))
-                    ) : (
-                        <span className="text-gray-500 italic text-sm">Chưa cập nhật thể loại</span>
-                    )}
-                </div>
-
-                {/* 3. Hiển thị Ngày xuất bản */}
-                <div className="text-sm text-gray-500 mt-1">
-                    <span className="font-bold">Ngày đăng:</span> {new Date(comic.createdAt).toLocaleDateString('vi-VN')}
-                </div>
+                         </Link>
+                      );
+                   })
+                ) : (
+                    <div className="p-8 text-center text-gray-400 italic">Chưa có chương nào được cập nhật.</div>
+                )}
              </div>
           </div>
 
-          <p className="text-gray-700 mb-8 whitespace-pre-line leading-relaxed">{comic.description}</p>
-
-          {/* DANH SÁCH CHƯƠNG */}
-          <h2 className="text-xl font-bold mb-4 border-b pb-2 text-gray-800">Danh sách chương</h2>
-          <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto mb-10 border rounded-lg p-2 bg-gray-50">
-            {chapters.length > 0 ? (
-              chapters.map((chapter) => (
-                <Link 
-                  href={`/comics/${comicId}/chapter/${chapter.id}`} 
-                  key={chapter.id}
-                  className="flex justify-between items-center p-3 bg-white hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded transition group"
-                >
-                  <span className="font-medium group-hover:text-blue-700">Chương {chapter.chapterNumber}: {chapter.title}</span>
-                  <span className="text-sm text-gray-500">
-                    {new Date(chapter.publishDate).toLocaleDateString('vi-VN')}
-                  </span>
-                </Link>
-              ))
-            ) : (
-              <p className="text-center py-4 text-gray-500">Chưa có chương nào được cập nhật.</p>
-            )}
+          {/* Comment Section */}
+          <div className="mt-12">
+             <CommentSection comicId={comicId} />
           </div>
-          
-          {/* BÌNH LUẬN */}
-          <CommentSection comicId={comicId} />
         </div>
       </div>
     </div>
