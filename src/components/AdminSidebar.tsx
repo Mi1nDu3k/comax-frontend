@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaTachometerAlt, FaBook, FaUsers, FaArrowLeft, FaTrash } from 'react-icons/fa';
+import { FaTachometerAlt, FaBook, FaUsers, FaArrowLeft, FaTrash, FaTags } from 'react-icons/fa';
 import { FaBarcode } from 'react-icons/fa6';
 
 export default function AdminSidebar() {
@@ -11,6 +11,7 @@ export default function AdminSidebar() {
     { name: 'Dashboard', href: '/admin/dashboard', icon: FaTachometerAlt },
     { name: 'Quản lý User', href: '/admin/user', icon: FaUsers },
     { name: 'Quản lý Truyện', href: '/admin/comic', icon: FaBook },
+    { name: 'Quản lý Thể loại', href: '/admin/category', icon: FaTags },
     { name: 'Thùng rác', href:'/admin/recycle-bin',icon: FaTrash},
   ];
 
