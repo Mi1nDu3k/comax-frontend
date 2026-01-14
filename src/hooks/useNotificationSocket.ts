@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { toast } from 'react-toastify';
+import { useRouter } from 'next/navigation'; // 1. Import useRouter
 import { useAuth } from '@/context/auth.context';
 import { Notification } from '@/types/notification';
 
@@ -9,44 +10,49 @@ const HUB_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api')
 export const useNotificationSocket = () => {
     const { user } = useAuth();
     const [newNotification, setNewNotification] = useState<Notification | null>(null);
-    
-    // Sử dụng ref để giữ instance connection, tránh tạo lại liên tục
     const connectionRef = useRef<signalR.HubConnection | null>(null);
+    const router = useRouter(); // 2. Khởi tạo router
 
     useEffect(() => {
         if (!user) return;
 
-        // 1. Chỉ tạo connection nếu chưa có
+        // --- FIX LẠI CẤU HÌNH SIGNALR CHO CHUẨN ---
         if (!connectionRef.current) {
-            const token = localStorage.getItem('accessToken');
+            // Lấy token từ key chuẩn (kiểm tra cả 'accessToken' và 'token')
+            const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+            
             connectionRef.current = new signalR.HubConnectionBuilder()
                 .withUrl(HUB_URL, {
                     accessTokenFactory: () => token || '',
-                    skipNegotiation: true,
-                    transport: signalR.HttpTransportType.WebSockets
+                    // BỎ skipNegotiation: true để tránh lỗi Auth 401 trên một số môi trường
+                    // skipNegotiation: true, 
+                    // transport: signalR.HttpTransportType.WebSockets
                 })
                 .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Warning)
                 .build();
         }
 
         const connection = connectionRef.current;
 
-        // 2. Hàm Start an toàn
         const startConnection = async () => {
-            // Chỉ start nếu đang ngắt kết nối
             if (connection.state === signalR.HubConnectionState.Disconnected) {
                 try {
                     await connection.start();
                     console.log('📡 SignalR Connected');
                     
-                    // Đăng ký sự kiện
                     connection.on('ReceiveNotification', (noti: Notification) => {
                         console.log('🔔 New Notification:', noti);
                         setNewNotification(noti);
+                        
+                        // 3. FIX LỖI CHUYỂN HƯỚNG TẠI ĐÂY
                         toast.info(noti.message, {
                             position: "bottom-right",
                             autoClose: 5000,
-                            onClick: () => window.location.href = noti.url
+                            // Thay window.location.href bằng router.push
+                            onClick: () => {
+                                if (noti.url) router.push(noti.url);
+                            }
                         });
                     });
 
@@ -58,18 +64,14 @@ export const useNotificationSocket = () => {
 
         startConnection();
 
-        // 3. Cleanup Function
         return () => {
-            // Quan trọng: Tắt listener trước
             connection.off('ReceiveNotification');
-            
-            // Chỉ stop nếu đang connected (tránh lỗi stop khi đang connecting)
             if (connection.state === signalR.HubConnectionState.Connected) {
                 connection.stop();
             }
-            // Nếu đang Connecting, SignalR sẽ tự handle hoặc throw warning nhẹ, có thể bỏ qua
+            connectionRef.current = null; // Reset ref để đảm bảo clean sạch sẽ
         };
-    }, [user]);
+    }, [user, router]); // Thêm router vào dependency
 
     return { newNotification };
 };

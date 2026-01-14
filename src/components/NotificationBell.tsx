@@ -38,13 +38,16 @@ export default function NotificationBell() {
     }, [user]);
 
     // Lắng nghe socket
-    useEffect(() => {
+  useEffect(() => {
         if (newNotification) {
             setNotifications(prev => {
-                if (prev.some(n => n.id === newNotification.id)) return prev;
+                const isDuplicate = prev.some(n => n.id === newNotification.id);
+                if (isDuplicate) return prev; 
+                if (!newNotification.isRead) {
+                    setUnreadCount(count => count + 1);
+                }
                 return [newNotification, ...prev];
             });
-            setUnreadCount(prev => prev + 1);
         }
     }, [newNotification]);
 

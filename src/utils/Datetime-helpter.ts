@@ -12,9 +12,6 @@ dayjs.extend(utc);
 dayjs.locale('vi');
 
 /**
- * Tính khoảng cách thời gian từ hiện tại đến thời điểm được cung cấp.
- * Hỗ trợ đầu vào là chuỗi thời gian UTC.
- * Ví dụ: "vài giây trước", "2 phút trước", "1 ngày trước".
  * * @param dateString - Chuỗi thời gian (UTC)
  * @returns Chuỗi hiển thị khoảng cách thời gian
  */
