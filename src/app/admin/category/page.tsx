@@ -117,12 +117,14 @@ export default function CategoryManagerPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cat.description || '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button 
+                  aria-label="Sửa thể loại"
                     onClick={() => openModal(cat)}
                     className="text-indigo-600 hover:text-indigo-900 mr-4"
                   >
                     <FaEdit size={18} />
                   </button>
                   <button 
+                  aria-label="Xóa thể loại"
                     onClick={() => handleDelete(cat.id)}
                     className="text-red-600 hover:text-red-900"
                   >
@@ -144,7 +146,7 @@ export default function CategoryManagerPage() {
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">{isEditing ? 'Cập nhật Thể loại' : 'Thêm Thể loại mới'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700">
+              <button aria-label="s" onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700">
                 <FaTimes />
               </button>
             </div>

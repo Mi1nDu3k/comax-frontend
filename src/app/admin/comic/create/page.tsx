@@ -23,7 +23,6 @@ export default function CreateComicPage() {
   const [newAuthorName, setNewAuthorName] = useState(''); // Input tên tác giả mới
   const [creatingAuthor, setCreatingAuthor] = useState(false);
 
-  // Load dữ liệu ban đầu
   useEffect(() => {
     fetchAuthors();
     categoryService.getAll().then(setCategories);
@@ -63,7 +62,7 @@ export default function CreateComicPage() {
 
         await comicService.create(formData);
         alert('Thêm truyện thành công!');
-        router.push('/admin/comics');
+        router.push('/admin/comic');
       } catch (error) {
         console.error(error);
         alert('Lỗi khi thêm truyện. Vui lòng kiểm tra lại.');
@@ -87,16 +86,17 @@ export default function CreateComicPage() {
     );
   }, [categories, catSearch]);
 
-  const handleCategoryCheck = (catId: string) => {
-    const currentIds = formik.values.categoryIds;
-    if (currentIds.includes(catId)) {
-      // Nếu đã có -> Bỏ chọn
-      formik.setFieldValue('categoryIds', currentIds.filter(id => id !== catId));
-    } else {
-      // Chưa có -> Thêm vào
-      formik.setFieldValue('categoryIds', [...currentIds, catId]);
-    }
-  };
+  const handleCategoryCheck = (catId: number | string) => {
+  const idString = catId.toString(); // Ép kiểu sang chuỗi để khớp với Formik
+  const currentIds = formik.values.categoryIds;
+  
+  if (currentIds.includes(idString)) {
+    formik.setFieldValue('categoryIds', currentIds.filter(id => id !== idString));
+  } else {
+
+    formik.setFieldValue('categoryIds', [...currentIds, idString]);
+  }
+};
 
   // --- LOGIC XỬ LÝ THÊM TÁC GIẢ MỚI ---
   const handleCreateAuthor = async () => {
@@ -240,7 +240,7 @@ export default function CreateComicPage() {
                       <label key={cat.id} className="flex items-center gap-2 p-2 hover:bg-blue-50 rounded cursor-pointer transition select-none">
                         <input 
                           type="checkbox"
-                          checked={formik.values.categoryIds.includes(cat.id)}
+                          checked={formik.values.categoryIds.includes(cat.id.toString())}
                           onChange={() => handleCategoryCheck(cat.id)}
                           className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                         />

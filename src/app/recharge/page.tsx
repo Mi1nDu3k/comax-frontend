@@ -186,7 +186,7 @@ export default function RechargePage() {
                         <p className="text-xs text-gray-500 mb-1">Số tài khoản:</p>
                         <div className="flex justify-between items-center bg-white px-2 py-1.5 rounded border border-gray-200">
                           <span className="font-mono font-bold text-gray-800 text-sm">{BANK_CONFIG.ACCOUNT_NO}</span>
-                          <button  onClick={() => { navigator.clipboard.writeText(BANK_CONFIG.ACCOUNT_NO); toast.success("Đã sao chép STK"); }} className="text-blue-500 hover:bg-blue-50 p-1 rounded">
+                          <button aria-label="Copy Bank number"  onClick={() => { navigator.clipboard.writeText(BANK_CONFIG.ACCOUNT_NO); toast.success("Đã sao chép STK"); }} className="text-blue-500 hover:bg-blue-50 p-1 rounded">
                             <FaCopy size={14}/>
                           </button>
                         </div>
@@ -195,7 +195,7 @@ export default function RechargePage() {
                         <p className="text-xs text-gray-500 mb-1">Nội dung (Bắt buộc):</p>
                         <div className="flex justify-between items-center bg-white px-2 py-1.5 rounded border border-blue-200 ring-1 ring-blue-100">
                           <span className="font-mono font-bold text-blue-700 text-sm">{transferContent}</span>
-                          <button onClick={handleCopyContent} className="text-blue-500 hover:bg-blue-50 p-1 rounded">
+                          <button aria-label="Copy content" onClick={handleCopyContent} className="text-blue-500 hover:bg-blue-50 p-1 rounded">
                             <FaCopy size={14}/>
                           </button>
                         </div>
