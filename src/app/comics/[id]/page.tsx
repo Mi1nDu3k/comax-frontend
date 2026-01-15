@@ -11,7 +11,8 @@ import { FaHeart, FaRegHeart, FaBookOpen, FaHistory, FaAngleDoubleRight } from '
 import { toast } from 'react-toastify';
 import api from '@/lib/axios';
 import StarRating from '@/components/home/StarRating';
-import { useAuth } from '@/context/auth.context'; // Giả sử bạn có hook này để check login
+import { useAuth } from '@/context/auth.context'; 
+import RelatedComics from '@/components/comic/RelatedComics';
 
 // 1. Đưa Skeleton ra ngoài để tránh Re-creation
 const DetailSkeleton = () => (
