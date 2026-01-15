@@ -93,7 +93,7 @@ export default function HomePage() {
               <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition">
                 <div className="aspect-[2/3] relative bg-gray-200">
                   
-                  {/* --- COMIC IMAGE --- */}
+                 
                   <ComicImage
                     src={comic.thumbnailUrl || ''}
                     alt={comic.title}

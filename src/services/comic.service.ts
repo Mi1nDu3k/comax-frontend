@@ -73,5 +73,11 @@ search: async (keyword: string) => {
   // --- TĂNG LƯỢT XEM ---
   increaseView: async (id: number) => {
     return await api.post(`/comics/${id}/view`);
-  }
+  },
+  // --- LẤY DANH SÁCH TRUYỆN LIÊN QUAN ---
+  getRelated: async (id: number) => {
+    // Gọi vào endpoint ta vừa tạo ở bước 2
+    const res = await api.get<Comic[]>(`/comics/${id}/related`);
+    return res.data;
+},
 };

@@ -256,6 +256,11 @@ export default function ComicDetailPage() {
           <div className="mt-12">
              <CommentSection comicId={comicId} />
           </div>
+         
+        <div className="container mx-auto px-4 pb-10">
+
+           <RelatedComics currentId={Number(comicId)} />
+        </div>
         </div>
       </div>
     </div>
