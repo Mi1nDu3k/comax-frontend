@@ -1,45 +1,44 @@
+// src/hooks/useSignalR.ts
 import { useEffect, useState } from 'react';
-import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
+import { HubConnection, HubConnectionBuilder, LogLevel, HttpTransportType } from '@microsoft/signalr';
 import { useAuth } from '@/context/auth.context';
 
-export const useSignalR = () => {
+export const useSignalR = (hubPath: string = "/hubs/notification") => {
     const { user } = useAuth();
     const [connection, setConnection] = useState<HubConnection | null>(null);
 
     useEffect(() => {
-        // Nếu không có user, không làm gì (hoặc reset connection nếu cần)
         if (!user) {
-            //  eslint-disable-next-line 
             setConnection(null);
             return;
         }
 
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || '';
-        const hubUrl = `${baseUrl}/hubs/notification`;
-        // 1. Khởi tạo instance (chưa set vào state ngay)
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+        const hubUrl = `${baseUrl}${hubPath}`; // Ghép đường dẫn động
+
         const newConnection = new HubConnectionBuilder()
-           .withUrl(hubUrl, {
+            .withUrl(hubUrl, {
                 accessTokenFactory: () => localStorage.getItem('accessToken') || '',
+                // 👇 THÊM CẤU HÌNH MẠNH MẼ NÀY ĐỂ TRÁNH LỖI LOCALHOST
+                skipNegotiation: true,
+                transport: HttpTransportType.WebSockets
             })
             .withAutomaticReconnect()
             .configureLogging(LogLevel.Information)
             .build();
 
-        // 2. Bắt đầu kết nối
         newConnection.start()
             .then(() => {
-                console.log('SignalR Connected!');
-                // 3. Chỉ set state sau khi đã start thành công (Async update -> Fix lỗi ESLint)
+                console.log(`SignalR Connected to ${hubPath}!`);
                 setConnection(newConnection);
             })
-            .catch(err => console.error('SignalR Connection Error: ', err));
+            .catch(err => console.error(` SignalR Error (${hubPath}): `, err));
 
-        // 4. Cleanup function: Chạy khi user thay đổi hoặc component unmount
         return () => {
             newConnection.stop();
             setConnection(null);
         };
-    }, [user]); // Chỉ chạy lại khi user thay đổi
+    }, [user, hubPath]); // Chạy lại khi user hoặc đường dẫn thay đổi
 
     return connection;
 };

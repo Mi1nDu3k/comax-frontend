@@ -6,7 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from '@/context/auth.context';
 import Header from '@/components/Header'; 
 import Footer from '@/components/Footer'; 
-
+import AIChatWidget from '@/components/ai/AIChatWidget';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -40,6 +40,7 @@ export default function RootLayout({
 
           <ToastContainer position="bottom-right" />
         </AuthProvider>
+        <AIChatWidget />
       </body>
     </html>
   );

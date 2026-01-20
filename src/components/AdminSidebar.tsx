@@ -12,6 +12,7 @@ export default function AdminSidebar() {
     { name: 'Quản lý User', href: '/admin/user', icon: FaUsers },
     { name: 'Quản lý Truyện', href: '/admin/comic', icon: FaBook },
     { name: 'Quản lý Thể loại', href: '/admin/category', icon: FaTags },
+    { name: 'Crawler Truyện', href: '/admin/crawler', icon: FaBarcode },
     { name: 'Thùng rác', href:'/admin/recycle-bin',icon: FaTrash},
   ];
 
